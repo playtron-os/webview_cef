@@ -38,6 +38,7 @@
 #define CEF_INCLUDE_VIEWS_CEF_BROWSER_VIEW_DELEGATE_H_
 #pragma once
 
+#include "include/cef_api_hash.h"
 #include "include/cef_client.h"
 #include "include/views/cef_view_delegate.h"
 
@@ -113,19 +114,53 @@ class CefBrowserViewDelegate : public CefViewDelegate {
   /// documentation.
   ///
   /*--cef(default_retval=CEF_CTT_NONE)--*/
-  virtual ChromeToolbarType GetChromeToolbarType() { return CEF_CTT_NONE; }
+  virtual ChromeToolbarType GetChromeToolbarType(
+      CefRefPtr<CefBrowserView> browser_view) {
+    return CEF_CTT_NONE;
+  }
+
+  ///
+  /// Return true to create frameless windows for Document picture-in-picture
+  /// popups. Content in frameless windows should specify draggable regions
+  /// using "-webkit-app-region: drag" CSS.
+  ///
+  /*--cef()--*/
+  virtual bool UseFramelessWindowForPictureInPicture(
+      CefRefPtr<CefBrowserView> browser_view) {
+    return false;
+  }
+
+#if CEF_API_ADDED(13601)
+  ///
+  /// Return true to allow the use of JavaScript moveTo/By() and resizeTo/By()
+  /// (without user activation) with Document picture-in-picture popups.
+  ///
+  /*--cef(added=13601)--*/
+  virtual bool AllowMoveForPictureInPicture(
+      CefRefPtr<CefBrowserView> browser_view) {
+    return false;
+  }
+#endif
 
   ///
   /// Called when |browser_view| receives a gesture command. Return true to
   /// handle (or disable) a |gesture_command| or false to propagate the gesture
-  /// to the browser for default handling. This method will only be called with
-  /// the Alloy runtime. To handle these commands with the Chrome runtime
-  /// implement CefCommandHandler::OnChromeCommand instead.
+  /// to the browser for default handling. With Chrome style these commands can
+  /// also be handled via CefCommandHandler::OnChromeCommand.
   ///
   /*--cef()--*/
   virtual bool OnGestureCommand(CefRefPtr<CefBrowserView> browser_view,
                                 cef_gesture_command_t gesture_command) {
     return false;
+  }
+
+  ///
+  /// Optionally change the runtime style for this BrowserView. See
+  /// cef_runtime_style_t documentation for details.
+  ///
+  /*--cef(default_retval=CEF_RUNTIME_STYLE_DEFAULT)--*/
+  virtual cef_runtime_style_t GetBrowserRuntimeStyle() {
+    return CEF_RUNTIME_STYLE_DEFAULT;
   }
 };
 

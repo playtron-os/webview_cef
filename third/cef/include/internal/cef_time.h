@@ -35,8 +35,12 @@
 extern "C" {
 #endif
 
+#if !defined(GENERATING_CEF_API_HASH)
 #include <time.h>
-#include "include/base/cef_basictypes.h"
+#endif
+
+#include <stdint.h>
+
 #include "include/internal/cef_export.h"
 
 ///
@@ -47,7 +51,7 @@ extern "C" {
 /// This is equivalent of Chromium `base::Time` (see base/time/time.h).
 ///
 typedef struct _cef_basetime_t {
-  int64 val;
+  int64_t val;
 } cef_basetime_t;
 
 ///

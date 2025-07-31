@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Marshall A. Greenblatt. All rights reserved.
+// Copyright (c) 2025 Marshall A. Greenblatt. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -33,12 +33,16 @@
 // by hand. See the translator.README.txt file in the tools directory for
 // more information.
 //
-// $hash=598c6f530b2e2553197d8c6a72ad9e2bf72b5443$
+// $hash=438975254d7d0a4b97d7ad05e745e544728d41d6$
 //
 
 #ifndef CEF_INCLUDE_CAPI_CEF_COOKIE_CAPI_H_
 #define CEF_INCLUDE_CAPI_CEF_COOKIE_CAPI_H_
 #pragma once
+
+#if defined(BUILDING_CEF_SHARED)
+#error This file cannot be included DLL-side
+#endif
 
 #include "include/capi/cef_base_capi.h"
 #include "include/capi/cef_callback_capi.h"
@@ -54,6 +58,8 @@ struct _cef_set_cookie_callback_t;
 ///
 /// Structure used for managing cookies. The functions of this structure may be
 /// called on any thread unless otherwise indicated.
+///
+/// NOTE: This struct is allocated DLL-side.
 ///
 typedef struct _cef_cookie_manager_t {
   ///
@@ -136,6 +142,8 @@ CEF_EXPORT cef_cookie_manager_t* cef_cookie_manager_get_global_manager(
 /// Structure to implement for visiting cookie values. The functions of this
 /// structure will always be called on the UI thread.
 ///
+/// NOTE: This struct is allocated client-side.
+///
 typedef struct _cef_cookie_visitor_t {
   ///
   /// Base structure.
@@ -160,6 +168,8 @@ typedef struct _cef_cookie_visitor_t {
 /// Structure to implement to be notified of asynchronous completion via
 /// cef_cookie_manager_t::set_cookie().
 ///
+/// NOTE: This struct is allocated client-side.
+///
 typedef struct _cef_set_cookie_callback_t {
   ///
   /// Base structure.
@@ -177,6 +187,8 @@ typedef struct _cef_set_cookie_callback_t {
 ///
 /// Structure to implement to be notified of asynchronous completion via
 /// cef_cookie_manager_t::delete_cookies().
+///
+/// NOTE: This struct is allocated client-side.
 ///
 typedef struct _cef_delete_cookies_callback_t {
   ///

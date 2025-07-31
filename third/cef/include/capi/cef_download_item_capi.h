@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Marshall A. Greenblatt. All rights reserved.
+// Copyright (c) 2025 Marshall A. Greenblatt. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -33,12 +33,16 @@
 // by hand. See the translator.README.txt file in the tools directory for
 // more information.
 //
-// $hash=d9e9f4b914ae2d3b1ed83ae0d9e2e46e9e736af5$
+// $hash=7a70a551184bfa12ef6dddeea66fd585943c3c70$
 //
 
 #ifndef CEF_INCLUDE_CAPI_CEF_DOWNLOAD_ITEM_CAPI_H_
 #define CEF_INCLUDE_CAPI_CEF_DOWNLOAD_ITEM_CAPI_H_
 #pragma once
+
+#if defined(BUILDING_CEF_SHARED)
+#error This file cannot be included DLL-side
+#endif
 
 #include "include/capi/cef_base_capi.h"
 
@@ -48,6 +52,8 @@ extern "C" {
 
 ///
 /// Structure used to represent a download item.
+///
+/// NOTE: This struct is allocated DLL-side.
 ///
 typedef struct _cef_download_item_t {
   ///
@@ -90,7 +96,7 @@ typedef struct _cef_download_item_t {
   ///
   /// Returns a simple speed estimate in bytes/s.
   ///
-  int64(CEF_CALLBACK* get_current_speed)(struct _cef_download_item_t* self);
+  int64_t(CEF_CALLBACK* get_current_speed)(struct _cef_download_item_t* self);
 
   ///
   /// Returns the rough percent complete or -1 if the receive total size is
@@ -101,12 +107,12 @@ typedef struct _cef_download_item_t {
   ///
   /// Returns the total number of bytes.
   ///
-  int64(CEF_CALLBACK* get_total_bytes)(struct _cef_download_item_t* self);
+  int64_t(CEF_CALLBACK* get_total_bytes)(struct _cef_download_item_t* self);
 
   ///
   /// Returns the number of received bytes.
   ///
-  int64(CEF_CALLBACK* get_received_bytes)(struct _cef_download_item_t* self);
+  int64_t(CEF_CALLBACK* get_received_bytes)(struct _cef_download_item_t* self);
 
   ///
   /// Returns the time that the download started.
@@ -129,7 +135,7 @@ typedef struct _cef_download_item_t {
   ///
   /// Returns the unique identifier for this download.
   ///
-  uint32(CEF_CALLBACK* get_id)(struct _cef_download_item_t* self);
+  uint32_t(CEF_CALLBACK* get_id)(struct _cef_download_item_t* self);
 
   ///
   /// Returns the URL.
