@@ -199,6 +199,26 @@ class WebviewManager extends ValueNotifier<bool> {
     return pluginChannel.invokeMethod('clearDataPath', dataPath);
   }
 
+  /// Injects a single JavaScript script into a specific webview
+  /// and adds it to the persistent script collection
+  Future<void> injectScript(int browserId, String script,
+      {ScriptInjectTime when = ScriptInjectTime.LOAD_START}) async {
+    if (_webViews.containsKey(browserId)) {
+      if (value) {
+        // Execute the script immediately
+        await _webViews[browserId]?.executeJavaScript(script);
+      }
+
+      // Add to persistent scripts collection
+      if (_injectUserScripts.containsKey(browserId)) {
+        _injectUserScripts[browserId]!.add(UserScript(script, when));
+      } else {
+        _injectUserScripts[browserId] = InjectUserScripts()
+          ..add(UserScript(script, when));
+      }
+    }
+  }
+
   Future<dynamic> visitAllCookies() async {
     assert(value);
     return pluginChannel.invokeMethod('visitAllCookies');

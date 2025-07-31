@@ -143,6 +143,13 @@ class WebViewController extends ValueNotifier<bool> {
     return _pluginChannel.invokeMethod('stop', _browserId);
   }
 
+  /// Injects a JavaScript script that persists across page loads
+  Future<void> injectScript(String script,
+      {ScriptInjectTime when = ScriptInjectTime.LOAD_START}) async {
+    if (_isDisposed) return;
+    await WebviewManager().injectScript(_browserId, script, when: when);
+  }
+
   Future<void> goForward() async {
     if (_isDisposed) {
       return;
