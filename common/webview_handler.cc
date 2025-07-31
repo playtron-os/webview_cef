@@ -323,24 +323,42 @@ void WebviewHandler::createBrowser(std::string url, std::function<void(int)> cal
     callback(CefBrowserHost::CreateBrowserSync(window_info, this, url, browser_settings, nullptr, nullptr)->GetIdentifier());
 }
 
-void WebviewHandler::createBrowserWithDataPath(std::string url, std::string dataPath, std::function<void(int)> callback)
+void WebviewHandler::createBrowserWithOptions(std::string url, std::string dataPath, std::string locale, std::function<void(int)> callback)
 {
 #ifndef OS_MAC
     if (!CefCurrentlyOn(TID_UI))
     {
-        CefPostTask(TID_UI, base::BindOnce(&WebviewHandler::createBrowserWithDataPath, this, url, dataPath, callback));
+        CefPostTask(TID_UI, base::BindOnce(&WebviewHandler::createBrowserWithOptions, this, url, dataPath, locale, callback));
         return;
     }
 #endif
     CefBrowserSettings browser_settings;
     browser_settings.windowless_frame_rate = 30;
+
     CefWindowInfo window_info;
     window_info.SetAsWindowless(0);
 
-    // Create request context with custom data path
-    CefRequestContextSettings context_settings;
-    CefString(&context_settings.cache_path) = dataPath;
-    CefRefPtr<CefRequestContext> context = CefRequestContext::CreateContext(context_settings, nullptr);
+    CefRefPtr<CefRequestContext> context = nullptr;
+
+    // Create request context if we need to set dataPath or locale
+    if (!dataPath.empty() || !locale.empty())
+    {
+        CefRequestContextSettings context_settings;
+
+        // Set data path if provided
+        if (!dataPath.empty())
+        {
+            CefString(&context_settings.cache_path) = dataPath;
+        }
+
+        // Set locale if provided
+        if (!locale.empty())
+        {
+            CefString(&context_settings.accept_language_list) = locale;
+        }
+
+        context = CefRequestContext::CreateContext(context_settings, nullptr);
+    }
 
     callback(CefBrowserHost::CreateBrowserSync(window_info, this, url, browser_settings, nullptr, context)->GetIdentifier());
 }

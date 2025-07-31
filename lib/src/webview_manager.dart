@@ -32,10 +32,11 @@ class WebviewManager extends ValueNotifier<bool> {
     Widget? loading,
     InjectUserScripts? injectUserScripts,
     String? dataPath,
+    String? locale,
   }) {
     int browserIndex = nextIndex++;
     final controller = WebViewController(pluginChannel, browserIndex,
-        loading: loading, dataPath: dataPath);
+        loading: loading, dataPath: dataPath, locale: locale);
     _tempWebViews[browserIndex] = controller;
     _tempInjectUserScripts[browserIndex] =
         injectUserScripts ?? InjectUserScripts();

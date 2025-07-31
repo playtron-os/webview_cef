@@ -14,14 +14,16 @@ import 'webview_tooltip.dart';
 
 class WebViewController extends ValueNotifier<bool> {
   WebViewController(this._pluginChannel, this._index,
-      {Widget? loading, String? dataPath})
+      {Widget? loading, String? dataPath, String? locale})
       : super(false) {
     _loadingWidget = loading;
     _dataPath = dataPath;
+    _locale = locale;
   }
   final MethodChannel _pluginChannel;
   Widget? _loadingWidget;
   String? _dataPath;
+  String? _locale;
 
   late WebView _webviewWidget;
   Widget get webviewWidget => _webviewWidget;
@@ -66,9 +68,9 @@ class WebViewController extends ValueNotifier<bool> {
     try {
       await WebviewManager().ready;
       List args;
-      if (_dataPath != null) {
+      if (_dataPath != null || _locale != null) {
         args = await _pluginChannel
-            .invokeMethod('createWithDataPath', [url, _dataPath]);
+            .invokeMethod('createWithOptions', [url, _dataPath, _locale]);
       } else {
         args = await _pluginChannel.invokeMethod('create', url);
       }

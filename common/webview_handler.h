@@ -150,7 +150,7 @@ public:
 
     void closeBrowser(int browserId);
     void createBrowser(std::string url, std::function<void(int)> callback);
-    void createBrowserWithDataPath(std::string url, std::string dataPath, std::function<void(int)> callback);
+    void createBrowserWithOptions(std::string url, std::string dataPath, std::string locale, std::function<void(int)> callback);
 
     void sendScrollEvent(int browserId, int x, int y, int deltaX, int deltaY);
     void changeSize(int browserId, float a_dpi, int width, int height);

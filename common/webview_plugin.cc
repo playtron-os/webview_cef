@@ -278,12 +278,29 @@ namespace webview_cef
 				result(1, response);
 				webview_value_unref(response); });
 		}
-		else if (name.compare("createWithDataPath") == 0)
+
+		else if (name.compare("createWithOptions") == 0)
 		{
 			std::string url = webview_value_get_string(webview_value_get_list_value(values, 0));
-			std::string dataPath = webview_value_get_string(webview_value_get_list_value(values, 1));
-			m_handler->createBrowserWithDataPath(url, dataPath, [=](int browserId)
-												 {
+			std::string dataPath = "";
+			std::string locale = "";
+
+			// Get dataPath if provided (can be null)
+			WValue *dataPathValue = webview_value_get_list_value(values, 1);
+			if (dataPathValue && webview_value_get_type(dataPathValue) == Webview_Value_Type_String)
+			{
+				dataPath = webview_value_get_string(dataPathValue);
+			}
+
+			// Get locale if provided (can be null)
+			WValue *localeValue = webview_value_get_list_value(values, 2);
+			if (localeValue && webview_value_get_type(localeValue) == Webview_Value_Type_String)
+			{
+				locale = webview_value_get_string(localeValue);
+			}
+
+			m_handler->createBrowserWithOptions(url, dataPath, locale, [=](int browserId)
+												{
 				std::shared_ptr<WebviewTexture> renderer = m_createTextureFunc();
 				m_renderers[browserId] = renderer;
 				WValue	*response = webview_value_new_list();
