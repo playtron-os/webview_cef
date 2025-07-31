@@ -24,10 +24,21 @@ class WebViewController extends ValueNotifier<bool> {
   Widget? _loadingWidget;
   String? _dataPath;
   String? _locale;
+  bool _isPageLoading = false;
 
   late WebView _webviewWidget;
   Widget get webviewWidget => _webviewWidget;
   Widget get loadingWidget => _loadingWidget ?? const Text("loading...");
+
+  /// Returns true if the page is currently loading
+  bool get isPageLoading => _isPageLoading;
+
+  /// Internal method to update loading state (called by WebviewManager)
+  void setPageLoadingState(bool loading) {
+    if (_isPageLoading == loading) return;
+    _isPageLoading = loading;
+    notifyListeners();
+  }
 
   late Completer<void> _creatingCompleter;
   Future<void> get ready => _creatingCompleter.future;
@@ -108,6 +119,7 @@ class WebViewController extends ValueNotifier<bool> {
       return;
     }
     assert(value);
+    _isPageLoading = true; // Set loading state when starting to load a URL
     return _pluginChannel.invokeMethod('loadUrl', [_browserId, url]);
   }
 
@@ -117,7 +129,18 @@ class WebViewController extends ValueNotifier<bool> {
       return;
     }
     assert(value);
+    _isPageLoading = true; // Set loading state when reloading
     return _pluginChannel.invokeMethod('reload', _browserId);
+  }
+
+  /// Stops loading the current page.
+  Future<void> stop() async {
+    if (_isDisposed) {
+      return;
+    }
+    assert(value);
+    _isPageLoading = false; // Reset loading state when stopping
+    return _pluginChannel.invokeMethod('stop', _browserId);
   }
 
   Future<void> goForward() async {

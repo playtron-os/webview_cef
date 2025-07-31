@@ -370,6 +370,12 @@ namespace webview_cef
 			m_handler->reload(browserId);
 			result(1, nullptr);
 		}
+		else if (name.compare("stop") == 0)
+		{
+			int browserId = int(webview_value_get_int(values));
+			m_handler->stop(browserId);
+			result(1, nullptr);
+		}
 		else if (name.compare("openDevTools") == 0)
 		{
 			int browserId = int(webview_value_get_int(values));

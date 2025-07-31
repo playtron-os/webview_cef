@@ -150,6 +150,7 @@ class WebviewManager extends ValueNotifier<bool> {
 
         WebViewController controller =
             _webViews[browserId] as WebViewController;
+        controller.setPageLoadingState(true);
         _webViews[browserId]?.listener?.onLoadStart?.call(controller, urlId);
         return;
       case 'onLoadEnd':
@@ -163,6 +164,7 @@ class WebviewManager extends ValueNotifier<bool> {
 
         WebViewController controller =
             _webViews[browserId] as WebViewController;
+        controller.setPageLoadingState(false);
         _webViews[browserId]?.listener?.onLoadEnd?.call(controller, urlId);
         return;
       default:

@@ -161,6 +161,7 @@ public:
     void goForward(int browserId);
     void goBack(int browserId);
     void reload(int browserId);
+    void stop(int browserId);
     void openDevTools(int browserId);
 
     void imeSetComposition(int browserId, std::string text);
