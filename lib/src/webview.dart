@@ -299,6 +299,22 @@ class WebViewController extends ValueNotifier<bool> {
         .invokeMethod('setSize', [_browserId, dpi, size.width, size.height]);
   }
 
+  /// Manually update the webview size. Useful for custom resize handling.
+  Future<void> updateSize({double? dpi, double? width, double? height}) async {
+    if (_isDisposed) {
+      return;
+    }
+    assert(value);
+
+    // Use provided values or get current context values
+    final currentDpi = dpi ?? 1.0; // Default DPI if not provided
+    final currentWidth = width ?? 0.0;
+    final currentHeight = height ?? 0.0;
+
+    return _pluginChannel.invokeMethod(
+        'setSize', [_browserId, currentDpi, currentWidth, currentHeight]);
+  }
+
   Set<String> _extractJavascriptChannelNames(Set<JavascriptChannel> channels) {
     final Set<String> channelNames =
         channels.map((JavascriptChannel channel) => channel.name).toSet();
@@ -322,7 +338,10 @@ class WebViewController extends ValueNotifier<bool> {
 class WebView extends StatefulWidget {
   final WebViewController controller;
 
-  const WebView(this.controller, {Key? key}) : super(key: key);
+  const WebView(
+    this.controller, {
+    Key? key,
+  }) : super(key: key);
 
   @override
   WebViewState createState() => WebViewState();
@@ -335,6 +354,7 @@ class WebViewState extends State<WebView> with WebeViewTextInput {
   bool isPrimaryFocus = false;
   WebviewTooltip? _tooltip;
   MouseCursor _mouseType = SystemMouseCursors.basic;
+  Size? _lastReportedSize;
 
   WebViewController get _controller => widget.controller;
 
@@ -499,8 +519,15 @@ class WebViewState extends State<WebView> with WebeViewTextInput {
     final box = _key.currentContext?.findRenderObject() as RenderBox?;
     if (box != null) {
       await _controller.ready;
-      unawaited(
-          _controller._setSize(dpi, Size(box.size.width, box.size.height)));
+      final newSize = Size(box.size.width, box.size.height);
+
+      // Check if size actually changed
+      if (_lastReportedSize != null && _lastReportedSize == newSize) {
+        return;
+      }
+
+      _lastReportedSize = newSize;
+      unawaited(_controller._setSize(dpi, newSize));
     }
   }
 }
