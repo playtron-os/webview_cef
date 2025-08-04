@@ -404,6 +404,7 @@ class WebViewState extends State<WebView> with WebeViewTextInput {
       final box = _key.currentContext!.findRenderObject() as RenderBox;
       updateIMEComposionPosition(
           x.toDouble(), y.toDouble(), box.localToGlobal(Offset.zero));
+      setState(() {});
     };
 
     _controller._onToolTip = (final String text) {
