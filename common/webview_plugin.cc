@@ -634,13 +634,13 @@ namespace webview_cef
 		return 1;
 	}
 
-	void initCEFProcesses(CefMainArgs args)
+	int initCEFProcesses(CefMainArgs args)
 	{
 		mainArgs = args;
-		initCEFProcesses();
+		return initCEFProcesses();
 	}
 
-	void initCEFProcesses()
+	int initCEFProcesses()
 	{
 #ifdef OS_MAC
 		CefScopedLibraryLoader loader;
@@ -651,7 +651,7 @@ namespace webview_cef
 #endif
 		// handler = new WebviewHandler();
 		app = new WebviewApp();
-		CefExecuteProcess(mainArgs, app, nullptr);
+		return CefExecuteProcess(mainArgs, app, nullptr);
 	}
 
 	void startCEF()
