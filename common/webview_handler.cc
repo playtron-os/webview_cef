@@ -313,10 +313,9 @@ void WebviewHandler::OnLoadStart(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFra
 void WebviewHandler::OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
                                int httpStatusCode)
 {
-    if (onLoadEnd)
-    {
-        onLoadEnd(browser->GetIdentifier(), frame->GetURL());
-    }
+    if (current_focused_browser_ && current_focused_browser_->IsSame(browser)) browser->GetHost()->SetFocus(true);
+    if (onLoadEnd) onLoadEnd(browser->GetIdentifier(), frame->GetURL());
+    
     return;
 }
 
