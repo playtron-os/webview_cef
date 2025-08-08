@@ -16,6 +16,8 @@ class WebviewManager extends ValueNotifier<bool> {
 
   final MethodChannel pluginChannel = const MethodChannel("webview_cef");
 
+  void Function(WebViewController onPopupCreated)? onPopupCreated;
+
   final Map<int, WebViewController> _webViews = <int, WebViewController>{};
   final Map<int, InjectUserScripts?> _injectUserScripts =
       <int, InjectUserScripts>{};
@@ -52,8 +54,11 @@ class WebviewManager extends ValueNotifier<bool> {
 
   WebviewManager._internal() : super(false);
 
-  Future<void> initialize({String? userAgent}) async {
+  Future<void> initialize(
+      {void Function(WebViewController)? onPopupCreated,
+      String? userAgent}) async {
     _creatingCompleter = Completer<void>();
+    this.onPopupCreated = onPopupCreated;
     try {
       if (userAgent != null && userAgent.isNotEmpty) {
         await pluginChannel.invokeMethod('init', userAgent);
@@ -88,6 +93,41 @@ class WebviewManager extends ValueNotifier<bool> {
 
   Future<void> methodCallhandler(MethodCall call) async {
     switch (call.method) {
+      case "onClosed":
+        debugPrint("[onClosed]");
+        int browserId = call.arguments["browserId"] as int;
+        _webViews[browserId]?.listener?.onClosed?.call();
+        _webViews[browserId]?.dispose();
+        return;
+      case "onPopupCreated":
+        debugPrint("[onPopupCreated]");
+        int parentBrowserId = call.arguments["parentBrowserId"] as int;
+        int browserId = call.arguments["browserId"] as int;
+        int textureId = call.arguments["textureId"] as int;
+        debugPrint(
+            "[onPopupCreated] parentBrowserId: $parentBrowserId, browserId: $browserId, textureId: $textureId");
+
+        final webview =
+            WebViewController.createPopup(pluginChannel, browserId, textureId);
+        _webViews[browserId] = webview;
+        _injectUserScripts[browserId] = _injectUserScripts[parentBrowserId];
+
+        if (!_webViews.containsKey(parentBrowserId)) {
+          debugPrint(
+              "[onPopupCreated] Warning: parentBrowserId not found in _webViews");
+          webview.dispose();
+          return;
+        }
+
+        if (onPopupCreated == null) {
+          debugPrint(
+              "[onPopupCreated] No onPopupCreated handler defined, popup ignored");
+          webview.dispose();
+          return;
+        }
+
+        onPopupCreated?.call(webview);
+        return;
       case "urlChanged":
         int browserId = call.arguments["browserId"] as int;
         _webViews[browserId]

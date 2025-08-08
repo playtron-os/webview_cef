@@ -17,12 +17,15 @@ typedef LoadStopCb = void Function(WebViewController controller, String url);
 typedef OnConsoleMessage = void Function(
     int level, String message, String source, int line);
 
+typedef OnClosedCb = void Function();
+
 class WebviewEventsListener {
   TitleChangeCb? onTitleChanged;
   UrlChangeCb? onUrlChanged;
   OnConsoleMessage? onConsoleMessage;
   LoadStartCb? onLoadStart;
   LoadStopCb? onLoadEnd;
+  OnClosedCb? onClosed;
 
   WebviewEventsListener({
     this.onTitleChanged,
@@ -30,5 +33,6 @@ class WebviewEventsListener {
     this.onConsoleMessage,
     this.onLoadStart,
     this.onLoadEnd,
+    this.onClosed,
   });
 }

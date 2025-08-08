@@ -170,10 +170,52 @@ bool WebviewHandler::OnConsoleMessage(CefRefPtr<CefBrowser> browser,
 void WebviewHandler::OnAfterCreated(CefRefPtr<CefBrowser> browser)
 {
     CEF_REQUIRE_UI_THREAD();
-    if (!browser->IsPopup())
+    int browserId = browser->GetIdentifier();
+    auto info = browser_info();
+    info.browser = browser;
+    browser_map_.emplace(browserId, info);
+
+    // Check if this was a popup and handle it accordingly
+    if (browser->IsPopup())
     {
-        browser_map_.emplace(browser->GetIdentifier(), browser_info());
-        browser_map_[browser->GetIdentifier()].browser = browser;
+        info.is_popup = true;
+
+        if (!pending_popup_parents_queue_.empty())
+        {
+            int parentId = pending_popup_parents_queue_.front();
+            pending_popup_parents_queue_.pop();
+            info.parent_id = parentId;
+
+            auto parentIt = browser_map_.find(parentId);
+            if (parentIt != browser_map_.end())
+            {
+                const auto &parentInfo = parentIt->second;
+                info.width = parentInfo.width;
+                info.height = parentInfo.height;
+                info.dpi = parentInfo.dpi;
+                parentIt->second.popupStack.push_back(browserId);
+            }
+            else
+            {
+                std::cerr << "[OnAfterCreated] Warning: parentId not found in browser_map_\n";
+                closeBrowser(browserId);
+                return;
+            }
+
+            browser->GetHost()->WasResized();
+            browser->GetHost()->NotifyScreenInfoChanged();
+
+            if (onPopupCreated)
+            {
+                onPopupCreated(parentIt->second.browser->GetIdentifier(), browserId);
+            }
+        }
+        else
+        {
+            std::cerr << "[OnAfterCreated] Warning: No parent queued for popup\n";
+            closeBrowser(browserId);
+            return;
+        }
     }
 }
 
@@ -182,12 +224,18 @@ bool WebviewHandler::DoClose(CefRefPtr<CefBrowser> browser)
     CEF_REQUIRE_UI_THREAD();
     // Allow the close. For windowed browsers this will result in the OS close
     // event being sent.
+    if (onClosed)
+    {
+        onClosed(browser->GetIdentifier());
+    }
+    cleanUpBrowser(browser->GetIdentifier());
     return false;
 }
 
 void WebviewHandler::OnBeforeClose(CefRefPtr<CefBrowser> browser)
 {
     CEF_REQUIRE_UI_THREAD();
+    std::cerr << "[OnBeforeClose] browserId=" << browser->GetIdentifier() << "\n";
 }
 
 bool WebviewHandler::OnBeforePopup(CefRefPtr<CefBrowser> browser,
@@ -204,8 +252,12 @@ bool WebviewHandler::OnBeforePopup(CefRefPtr<CefBrowser> browser,
                                    CefRefPtr<CefDictionaryValue> &extra_info,
                                    bool *no_javascript_access)
 {
-    loadUrl(browser->GetIdentifier(), target_url);
-    return true;
+    // Setup popup as a new windowless browser
+    int parentId = browser->GetIdentifier();
+    windowInfo.SetAsWindowless(0);               // Headless/offscreen
+    client = this;                               // Reuse the current handler
+    pending_popup_parents_queue_.push(parentId); // Queue the parent for the popup to be handled in OnAfterCreated
+    return false;
 }
 
 void WebviewHandler::OnTakeFocus(CefRefPtr<CefBrowser> browser, bool next)
@@ -296,6 +348,25 @@ bool WebviewHandler::IsChromeRuntimeEnabled()
     return value == 1;
 }
 
+void WebviewHandler::cleanUpBrowser(int browserId)
+{
+    auto it = browser_map_.find(browserId);
+    if (it != browser_map_.end())
+    {
+        it->second.browser = nullptr;
+        browser_map_.erase(it);
+
+        if (it->second.is_popup && it->second.parent_id != -1)
+        {
+            auto parentIt = browser_map_.find(it->second.parent_id);
+            if (parentIt != browser_map_.end())
+            {
+                parentIt->second.popupStack.remove(browserId);
+            }
+        }
+    }
+}
+
 void WebviewHandler::closeBrowser(int browserId)
 {
     auto it = browser_map_.find(browserId);
@@ -303,7 +374,7 @@ void WebviewHandler::closeBrowser(int browserId)
     {
         it->second.browser->GetHost()->CloseBrowser(true);
         it->second.browser = nullptr;
-        browser_map_.erase(it);
+        cleanUpBrowser(browserId);
     }
 }
 
@@ -464,7 +535,7 @@ void WebviewHandler::OnImeCompositionRangeChanged(CefRefPtr<CefBrowser> browser,
 {
     CEF_REQUIRE_UI_THREAD();
     auto it = browser_map_.find(browser->GetIdentifier());
-    if (it == browser_map_.end() || !it->second.browser.get() || browser->IsPopup())
+    if (it == browser_map_.end() || !it->second.browser.get())
     {
         return;
     }
@@ -806,8 +877,10 @@ void WebviewHandler::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect &rect)
 {
     CEF_REQUIRE_UI_THREAD();
     auto it = browser_map_.find(browser->GetIdentifier());
-    if (it == browser_map_.end() || !it->second.browser.get() || browser->IsPopup())
+    if (it == browser_map_.end() || !it->second.browser.get())
     {
+        // Needed because CEF crashes if width/height is 0
+        rect = CefRect(0, 0, 1, 1);
         return;
     }
     rect.x = rect.y = 0;
@@ -841,8 +914,23 @@ bool WebviewHandler::GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo 
 void WebviewHandler::OnPaint(CefRefPtr<CefBrowser> browser, CefRenderHandler::PaintElementType type,
                              const CefRenderHandler::RectList &dirtyRects, const void *buffer, int w, int h)
 {
-    if (!browser->IsPopup() && onPaintCallback != nullptr)
+    if (!browser.get())
     {
-        onPaintCallback(browser->GetIdentifier(), buffer, w, h);
+        std::cerr << "[OnPaint] Warning: browser is null\n";
+        return;
+    }
+
+    int browserId = browser->GetIdentifier();
+
+    auto it = browser_map_.find(browserId);
+    if (it == browser_map_.end())
+    {
+        std::cerr << "[OnPaint] Warning: browserId=" << browserId << " not in browser_map_\n";
+        return;
+    }
+
+    if (onPaintCallback != nullptr)
+    {
+        onPaintCallback(browserId, buffer, w, h);
     }
 }

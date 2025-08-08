@@ -37,6 +37,38 @@ namespace webview_cef
 	{
 		if (!m_init)
 		{
+			m_handler->onClosed = [=](int browserId)
+			{
+				if (m_invokeFunc)
+				{
+					WValue *msg = webview_value_new_map();
+					webview_value_set_string(msg, "browserId", webview_value_new_int(browserId));
+					m_invokeFunc("onClosed", msg);
+					webview_value_unref(msg);
+				}
+
+				if (m_renderers.find(browserId) != m_renderers.end() && m_renderers[browserId] != nullptr)
+				{
+					m_renderers[browserId].reset();
+				}
+			};
+
+			m_handler->onPopupCreated = [=](int parentBrowserId, int browserId)
+			{
+				std::shared_ptr<WebviewTexture> renderer = m_createTextureFunc();
+				m_renderers[browserId] = renderer;
+
+				if (m_invokeFunc)
+				{
+					WValue *msg = webview_value_new_map();
+					webview_value_set_string(msg, "parentBrowserId", webview_value_new_int(parentBrowserId));
+					webview_value_set_string(msg, "browserId", webview_value_new_int(browserId));
+					webview_value_set_string(msg, "textureId", webview_value_new_int(renderer->textureId));
+					m_invokeFunc("onPopupCreated", msg);
+					webview_value_unref(msg);
+				}
+			};
+
 			m_handler->onPaintCallback = [=](int browserId, const void *buffer, int32_t width, int32_t height)
 			{
 				if (m_renderers.find(browserId) != m_renderers.end() && m_renderers[browserId] != nullptr)
@@ -232,6 +264,8 @@ namespace webview_cef
 
 	void WebviewPlugin::uninitCallback()
 	{
+		m_handler->onClosed = nullptr;
+		m_handler->onPopupCreated = nullptr;
 		m_handler->onPaintCallback = nullptr;
 		m_handler->onTooltipEvent = nullptr;
 		m_handler->onCursorChangedEvent = nullptr;

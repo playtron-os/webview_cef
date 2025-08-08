@@ -10,6 +10,7 @@
 #include <functional>
 #include <list>
 #include <unordered_map>
+#include <queue>
 
 #include "webview_cookieVisitor.h"
 
@@ -29,6 +30,9 @@ struct browser_info
     bool is_dragging = false;
     CefRect prev_ime_position = CefRect();
     bool is_ime_commit = false;
+    bool is_popup = false;
+    int parent_id = -1;
+    std::list<int> popupStack;
 };
 
 class WebviewHandler : public CefClient,
@@ -50,9 +54,13 @@ public:
     std::function<void(int browserId, bool editable)> onFocusedNodeChangeMessage;
     std::function<void(int browserId, int32_t x, int32_t y)> onImeCompositionRangeChangedMessage;
     // webpage message
+    std::function<void(int browserId)> onClosed;
     std::function<void(std::string, std::string, std::string, int browserId, std::string)> onJavaScriptChannelMessage;
     std::function<void(int browserId, std::string url)> onLoadStart;
     std::function<void(int browserId, std::string url)> onLoadEnd;
+    // popup
+    std::function<void(int parentBrowserId, int browserId)> onPopupCreated;
+    std::queue<int> pending_popup_parents_queue_;
 
     explicit WebviewHandler();
     ~WebviewHandler();
@@ -179,6 +187,8 @@ public:
     void executeJavaScript(int browserId, const std::string code, std::function<void(CefRefPtr<CefValue>)> callback = nullptr);
 
 private:
+    void cleanUpBrowser(int browserId);
+
     // List of existing browser windows. Only accessed on the CEF UI thread.
     std::unordered_map<int, browser_info> browser_map_;
 

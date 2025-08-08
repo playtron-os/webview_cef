@@ -20,6 +20,18 @@ class WebViewController extends ValueNotifier<bool> {
     _dataPath = dataPath;
     _locale = locale;
   }
+
+  WebViewController.createPopup(
+      MethodChannel pluginChannel, int browserId, int textureId)
+      : _pluginChannel = pluginChannel,
+        _index = 0,
+        super(true) {
+    _browserId = browserId;
+    _textureId = textureId;
+    _webviewWidget = WebView(this);
+    _creatingCompleter = Completer<void>()..complete();
+  }
+
   final MethodChannel _pluginChannel;
   Widget? _loadingWidget;
   String? _dataPath;
