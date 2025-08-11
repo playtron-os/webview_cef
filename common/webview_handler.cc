@@ -97,14 +97,6 @@ WebviewHandler::~WebviewHandler()
     js_callbacks_.clear();
 }
 
-static inline bool IsDevtoolsUrlOrEmpty(const CefString &url)
-{
-    if (url.empty())
-        return true; // DevTools often blank here
-    const std::string s = url.ToString();
-    return s.rfind("devtools://", 0) == 0;
-}
-
 static bool EnsureDirUsable(const std::string &path, std::string *err_out = nullptr)
 {
     if (path.empty())
@@ -264,7 +256,7 @@ void WebviewHandler::OnAfterCreated(CefRefPtr<CefBrowser> browser)
 
     auto url = browser->GetMainFrame()->GetURL();
 
-    if (browser->IsPopup() && !IsDevtoolsUrlOrEmpty(url))
+    if (browser->IsPopup() && browser->GetHost()->IsWindowRenderingDisabled())
     {
         self.is_popup = true;
         if (!pending_popup_parents_queue_.empty())
@@ -336,12 +328,6 @@ bool WebviewHandler::OnBeforePopup(CefRefPtr<CefBrowser> browser,
                                    CefRefPtr<CefDictionaryValue> &extra_info,
                                    bool *no_javascript_access)
 {
-    if (IsDevtoolsUrlOrEmpty(target_url))
-    {
-        client = this;
-        return false;
-    }
-
     // Setup popup as a new windowless browser
     int parentId = browser->GetIdentifier();
     windowInfo.SetAsWindowless(0);               // Headless/offscreen
@@ -1020,7 +1006,7 @@ bool WebviewHandler::GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo 
         return false;
     }
     screen_info.device_scale_factor = it->second.dpi;
-    return true;
+    return false;
 }
 
 void WebviewHandler::OnPaint(CefRefPtr<CefBrowser> browser, CefRenderHandler::PaintElementType type,
