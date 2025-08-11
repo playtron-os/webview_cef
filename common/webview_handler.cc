@@ -328,9 +328,11 @@ void WebviewHandler::OnLoadStart(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFra
 void WebviewHandler::OnLoadEnd(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
                                int httpStatusCode)
 {
-    if (current_focused_browser_ && current_focused_browser_->IsSame(browser)) browser->GetHost()->SetFocus(true);
-    if (onLoadEnd) onLoadEnd(browser->GetIdentifier(), frame->GetURL());
-    
+    if (current_focused_browser_ && current_focused_browser_->IsSame(browser))
+        browser->GetHost()->SetFocus(true);
+    if (onLoadEnd)
+        onLoadEnd(browser->GetIdentifier(), frame->GetURL());
+
     return;
 }
 
@@ -891,7 +893,7 @@ void WebviewHandler::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect &rect)
 {
     CEF_REQUIRE_UI_THREAD();
     auto it = browser_map_.find(browser->GetIdentifier());
-    if (it == browser_map_.end() || !it->second.browser.get())
+    if (it == browser_map_.end())
     {
         // Needed because CEF crashes if width/height is 0
         rect = CefRect(0, 0, 1, 1);
