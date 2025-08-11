@@ -64,6 +64,14 @@ WebviewHandler::~WebviewHandler()
     js_callbacks_.clear();
 }
 
+static inline bool IsDevtoolsUrlOrEmpty(const CefString &url)
+{
+    if (url.empty())
+        return true; // DevTools often blank here
+    const std::string s = url.ToString();
+    return s.rfind("devtools://", 0) == 0;
+}
+
 bool WebviewHandler::OnProcessMessageReceived(
     CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
     CefProcessId source_process, CefRefPtr<CefProcessMessage> message)
@@ -175,8 +183,10 @@ void WebviewHandler::OnAfterCreated(CefRefPtr<CefBrowser> browser)
     info.browser = browser;
     browser_map_.emplace(browserId, info);
 
+    auto url = browser->GetMainFrame()->GetURL();
+
     // Check if this was a popup and handle it accordingly
-    if (browser->IsPopup())
+    if (browser->IsPopup() && !IsDevtoolsUrlOrEmpty(url))
     {
         info.is_popup = true;
 
@@ -235,7 +245,6 @@ bool WebviewHandler::DoClose(CefRefPtr<CefBrowser> browser)
 void WebviewHandler::OnBeforeClose(CefRefPtr<CefBrowser> browser)
 {
     CEF_REQUIRE_UI_THREAD();
-    std::cerr << "[OnBeforeClose] browserId=" << browser->GetIdentifier() << "\n";
 }
 
 bool WebviewHandler::OnBeforePopup(CefRefPtr<CefBrowser> browser,
@@ -252,6 +261,12 @@ bool WebviewHandler::OnBeforePopup(CefRefPtr<CefBrowser> browser,
                                    CefRefPtr<CefDictionaryValue> &extra_info,
                                    bool *no_javascript_access)
 {
+    if (IsDevtoolsUrlOrEmpty(target_url))
+    {
+        client = this;
+        return false;
+    }
+
     // Setup popup as a new windowless browser
     int parentId = browser->GetIdentifier();
     windowInfo.SetAsWindowless(0);               // Headless/offscreen
