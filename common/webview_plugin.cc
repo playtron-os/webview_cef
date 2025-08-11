@@ -9,6 +9,9 @@
 #include <thread>
 #include <iostream>
 #include <unordered_map>
+#include <filesystem> // Add this include for std::filesystem
+
+namespace fs = std::filesystem;
 
 namespace webview_cef
 {
@@ -693,20 +696,44 @@ namespace webview_cef
 		CefSettings cefs;
 		cefs.windowless_rendering_enabled = true;
 		cefs.no_sandbox = true;
-		if (!userAgent.empty())
-		{
-			CefString(&cefs.user_agent_product) = userAgent;
-		}
-		// locale language setting
-		// CefString(&cefs.locale) = "zh-CN";
-#ifdef OS_MAC
-		// cef message loop handle by MainApplication on mac
-		cefs.external_message_pump = true;
-		// CefString(&cefs.browser_subprocess_path) = "/Library/Chaches"; //the helper Program path
-#else
-		// cef message run in another thread on windows/linux
+#if !defined(OS_MAC)
 		cefs.multi_threaded_message_loop = true;
+#else
+		cefs.external_message_pump = true;
 #endif
+
+		std::string base;
+		if (const char *xdg_data_home = std::getenv("XDG_DATA_HOME"); xdg_data_home && xdg_data_home[0])
+		{
+			base = xdg_data_home;
+		}
+		else
+		{
+			const char *home = std::getenv("HOME");
+			base = (home ? std::string(home) : "") + "/.local/share";
+		}
+
+		auto g_root_cache_path = base + "/webview_cef/cache";
+
+		// Ensure root exists and is writable *before* CefInitialize.
+		std::error_code ec;
+		fs::create_directories(g_root_cache_path, ec);
+		if (ec)
+		{
+			std::cerr << "[CEF] failed to create root dir: " << g_root_cache_path
+					  << " (" << ec.message() << ")\n";
+		}
+
+		CefString(&cefs.root_cache_path) = g_root_cache_path;
+
+		// Log canonical root (helps diagnose /home vs symlink mismatches)
+		std::error_code ec2;
+		auto canon = fs::weakly_canonical(g_root_cache_path, ec2);
+		std::cerr << "Cef root cache path: " << (ec2 ? std::string(g_root_cache_path) : canon.string()) << "\n";
+
+		if (!userAgent.empty())
+			CefString(&cefs.user_agent_product) = userAgent;
+
 		CefInitialize(mainArgs, cefs, app.get(), nullptr);
 	}
 

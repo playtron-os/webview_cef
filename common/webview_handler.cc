@@ -20,8 +20,11 @@
 #include "include/views/cef_window.h"
 #include "include/wrapper/cef_closure_task.h"
 #include "include/wrapper/cef_helpers.h"
+#include "include/cef_request_context_handler.h"
 
 #include <sstream>
+
+namespace fs = std::filesystem;
 
 // std::to_string fails for ints on Ubuntu 24.04:
 // webview_handler.cc:86:86: error: no matching function for call to 'to_string'
@@ -52,6 +55,36 @@ namespace
                    .ToString();
     }
 
+    class RcInitHandler : public CefRequestContextHandler
+    {
+    public:
+        RcInitHandler(WebviewHandler *handler,
+                      std::string url,
+                      std::string dataPath,
+                      std::string locale,
+                      std::function<void(int)> callback)
+            : handler_(handler),
+              url_(std::move(url)),
+              dataPath_(std::move(dataPath)),
+              locale_(std::move(locale)),
+              callback_(std::move(callback)) {}
+
+        void OnRequestContextInitialized(CefRefPtr<CefRequestContext> context) override
+        {
+            // Always marshal to UI before creating a browser
+            CefPostTask(TID_UI, base::BindOnce(&WebviewHandler::createBrowserOnUI,
+                                               handler_, url_, dataPath_, locale_,
+                                               context, callback_));
+        }
+
+        IMPLEMENT_REFCOUNTING(RcInitHandler);
+
+    private:
+        WebviewHandler *handler_;
+        std::string url_, dataPath_, locale_;
+        std::function<void(int)> callback_;
+    };
+
 } // namespace
 
 WebviewHandler::WebviewHandler()
@@ -70,6 +103,48 @@ static inline bool IsDevtoolsUrlOrEmpty(const CefString &url)
         return true; // DevTools often blank here
     const std::string s = url.ToString();
     return s.rfind("devtools://", 0) == 0;
+}
+
+static bool EnsureDirUsable(const std::string &path, std::string *err_out = nullptr)
+{
+    if (path.empty())
+        return true;
+
+    fs::path p(path);
+
+    if (!p.is_absolute())
+    {
+        if (err_out)
+            *err_out = "cache_path must be absolute";
+        return false;
+    }
+
+    // mkdir -p
+    std::error_code ec;
+    fs::create_directories(p, ec);
+    if (ec)
+    {
+        if (err_out)
+            *err_out = "failed to create directories: " + ec.message();
+        return false;
+    }
+
+    // Make sure it’s writable (create + remove a temp file).
+    const fs::path probe = p / ".cef_write_probe";
+    {
+        std::ofstream f(probe, std::ios::out | std::ios::trunc);
+        if (!f.is_open())
+        {
+            if (err_out)
+                *err_out = "failed to open probe file for writing";
+            return false;
+        }
+        f << "ok";
+    }
+
+    fs::remove(probe, ec);
+    // Don't fail if remove fails, just clear error if needed
+    return true;
 }
 
 bool WebviewHandler::OnProcessMessageReceived(
@@ -178,37 +253,39 @@ bool WebviewHandler::OnConsoleMessage(CefRefPtr<CefBrowser> browser,
 void WebviewHandler::OnAfterCreated(CefRefPtr<CefBrowser> browser)
 {
     CEF_REQUIRE_UI_THREAD();
-    int browserId = browser->GetIdentifier();
-    auto info = browser_info();
-    info.browser = browser;
-    browser_map_.emplace(browserId, info);
+    const int id = browser->GetIdentifier();
+
+    auto bi = browser_info();
+    bi.browser = browser;
+    browser_map_.emplace(id, bi);
+
+    auto itSelf = browser_map_.find(id);
+    auto &self = itSelf->second;
 
     auto url = browser->GetMainFrame()->GetURL();
 
-    // Check if this was a popup and handle it accordingly
     if (browser->IsPopup() && !IsDevtoolsUrlOrEmpty(url))
     {
-        info.is_popup = true;
-
+        self.is_popup = true;
         if (!pending_popup_parents_queue_.empty())
         {
             int parentId = pending_popup_parents_queue_.front();
             pending_popup_parents_queue_.pop();
-            info.parent_id = parentId;
+            self.parent_id = parentId;
 
             auto parentIt = browser_map_.find(parentId);
             if (parentIt != browser_map_.end())
             {
-                const auto &parentInfo = parentIt->second;
-                info.width = parentInfo.width;
-                info.height = parentInfo.height;
-                info.dpi = parentInfo.dpi;
-                parentIt->second.popupStack.push_back(browserId);
+                const auto &parent = parentIt->second;
+                self.width = parent.width;
+                self.height = parent.height;
+                self.dpi = parent.dpi;
+                parentIt->second.popupStack.push_back(id);
             }
             else
             {
-                std::cerr << "[OnAfterCreated] Warning: parentId not found in browser_map_\n";
-                closeBrowser(browserId);
+                std::cerr << "[OnAfterCreated] Warning: parentId not found\n";
+                closeBrowser(id);
                 return;
             }
 
@@ -216,14 +293,12 @@ void WebviewHandler::OnAfterCreated(CefRefPtr<CefBrowser> browser)
             browser->GetHost()->NotifyScreenInfoChanged();
 
             if (onPopupCreated)
-            {
-                onPopupCreated(parentIt->second.browser->GetIdentifier(), browserId);
-            }
+                onPopupCreated(parentId, id);
         }
         else
         {
             std::cerr << "[OnAfterCreated] Warning: No parent queued for popup\n";
-            closeBrowser(browserId);
+            closeBrowser(id);
             return;
         }
     }
@@ -394,6 +469,20 @@ void WebviewHandler::closeBrowser(int browserId)
     }
 }
 
+CefRefPtr<CefRequestContext> WebviewHandler::createContext(const std::string &url, const std::string &dataPath, const std::string &locale, std::function<void(int)> callback)
+{
+    CefRequestContextSettings cs;
+    CefString(&cs.cache_path) = dataPath;
+
+    if (!locale.empty())
+    {
+        CefString(&cs.accept_language_list) = locale;
+    }
+
+    auto handler = new RcInitHandler(this, url, dataPath, locale, callback);
+    return CefRequestContext::CreateContext(cs, handler);
+}
+
 void WebviewHandler::createBrowser(std::string url, std::function<void(int)> callback)
 {
 #ifndef OS_MAC
@@ -410,44 +499,55 @@ void WebviewHandler::createBrowser(std::string url, std::function<void(int)> cal
     callback(CefBrowserHost::CreateBrowserSync(window_info, this, url, browser_settings, nullptr, nullptr)->GetIdentifier());
 }
 
-void WebviewHandler::createBrowserWithOptions(std::string url, std::string dataPath, std::string locale, std::function<void(int)> callback)
+void WebviewHandler::createBrowserOnUI(std::string url,
+                                       std::string dataPath,
+                                       std::string locale,
+                                       CefRefPtr<CefRequestContext> ctx,
+                                       std::function<void(int)> callback)
+{
+    CEF_REQUIRE_UI_THREAD();
+
+    CefBrowserSettings bs;
+    bs.windowless_frame_rate = 30;
+
+    CefWindowInfo wi;
+#if defined(OS_WIN)
+    wi.SetAsWindowless(nullptr);
+#else
+    wi.SetAsWindowless(0);
+#endif
+
+    CefRefPtr<CefBrowser> browser =
+        CefBrowserHost::CreateBrowserSync(wi, this, url, bs, nullptr, ctx);
+
+    callback(browser->GetIdentifier());
+}
+
+void WebviewHandler::createBrowserWithOptions(std::string url,
+                                              std::string dataPath,
+                                              std::string locale,
+                                              std::function<void(int)> callback)
 {
 #ifndef OS_MAC
     if (!CefCurrentlyOn(TID_UI))
     {
-        CefPostTask(TID_UI, base::BindOnce(&WebviewHandler::createBrowserWithOptions, this, url, dataPath, locale, callback));
+        CefPostTask(TID_UI, base::BindOnce(&WebviewHandler::createBrowserWithOptions,
+                                           this, url, dataPath, locale, callback));
         return;
     }
 #endif
-    CefBrowserSettings browser_settings;
-    browser_settings.windowless_frame_rate = 30;
 
-    CefWindowInfo window_info;
-    window_info.SetAsWindowless(0);
-
-    CefRefPtr<CefRequestContext> context = nullptr;
-
-    // Create request context if we need to set dataPath or locale
-    if (!dataPath.empty() || !locale.empty())
+    // Validate dataPath: absolute + usable + under root (if root is set)
+    if (!dataPath.empty())
     {
-        CefRequestContextSettings context_settings;
-
-        // Set data path if provided
-        if (!dataPath.empty())
+        std::string err;
+        if (!fs::path(dataPath).is_absolute() || !EnsureDirUsable(dataPath, &err))
         {
-            CefString(&context_settings.cache_path) = dataPath;
+            dataPath.clear();
         }
-
-        // Set locale if provided
-        if (!locale.empty())
-        {
-            CefString(&context_settings.accept_language_list) = locale;
-        }
-
-        context = CefRequestContext::CreateContext(context_settings, nullptr);
     }
 
-    callback(CefBrowserHost::CreateBrowserSync(window_info, this, url, browser_settings, nullptr, context)->GetIdentifier());
+    createContext(url, dataPath, locale, callback);
 }
 
 void WebviewHandler::sendScrollEvent(int browserId, int x, int y, int deltaX, int deltaY)
@@ -739,40 +839,31 @@ void WebviewHandler::clearDataPath(const std::string &dataPath)
         return;
     }
 
-    // First, try to clear data using CEF's cookie manager
-    CefRequestContextSettings context_settings;
-    CefString(&context_settings.cache_path) = dataPath;
-    CefRefPtr<CefRequestContext> context = CefRequestContext::CreateContext(context_settings, nullptr);
+    // ⚠️ IMPORTANT: This function assumes no browser instance is currently
+    // using this `dataPath`. Calling this on an active profile will cause
+    // instability and likely crash the application.
 
-    if (context)
-    {
-        // Clear cookies for this context
-        CefRefPtr<CefCookieManager> manager = context->GetCookieManager(nullptr);
-        if (manager)
-        {
-            manager->DeleteCookies("", "", nullptr);
-        }
-    }
-
-    // Additionally, remove files from the filesystem
-    // Note: This should only be done when no browsers are using this data path
-    std::filesystem::path dirPath(dataPath);
+    // The most reliable method is to delete the contents of the directory.
+    // This removes cookies, local storage, the cache, login credentials,
+    // IndexedDB, and everything else associated with the profile.
     std::error_code ec;
+    fs::path dirPath(dataPath);
 
-    if (std::filesystem::exists(dirPath, ec) && !ec && std::filesystem::is_directory(dirPath, ec) && !ec)
+    // Check if the directory exists and is actually a directory.
+    if (fs::exists(dirPath, ec) && !ec && fs::is_directory(dirPath, ec) && !ec)
     {
-        // Remove all contents of the directory but keep the directory itself
-        for (const auto &entry : std::filesystem::directory_iterator(dirPath, ec))
+        // Iterate over the contents and remove each item.
+        for (const auto &entry : fs::directory_iterator(dirPath, ec))
         {
             if (ec)
                 break; // Stop if there's an error reading the directory
 
-            std::filesystem::remove_all(entry.path(), ec);
+            fs::remove_all(entry.path(), ec);
             if (ec)
             {
-                // Log error but continue with other files
+                // Log the error but attempt to continue with other files.
                 std::cerr << "Error removing " << entry.path() << ": " << ec.message() << std::endl;
-                ec.clear(); // Clear error and continue
+                ec.clear(); // Clear the error and continue.
             }
         }
     }
@@ -923,8 +1014,13 @@ void WebviewHandler::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect &rect)
 bool WebviewHandler::GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo &screen_info)
 {
     // todo: hi dpi support
-    screen_info.device_scale_factor = browser_map_[browser->GetIdentifier()].dpi;
-    return false;
+    auto it = browser_map_.find(browser->GetIdentifier());
+    if (it == browser_map_.end())
+    {
+        return false;
+    }
+    screen_info.device_scale_factor = it->second.dpi;
+    return true;
 }
 
 void WebviewHandler::OnPaint(CefRefPtr<CefBrowser> browser, CefRenderHandler::PaintElementType type,

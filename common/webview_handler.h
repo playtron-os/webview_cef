@@ -159,6 +159,11 @@ public:
     void closeBrowser(int browserId);
     void createBrowser(std::string url, std::function<void(int)> callback);
     void createBrowserWithOptions(std::string url, std::string dataPath, std::string locale, std::function<void(int)> callback);
+    void createBrowserOnUI(std::string url,
+                           std::string dataPath,
+                           std::string locale,
+                           CefRefPtr<CefRequestContext> ctx,
+                           std::function<void(int)> callback);
 
     void sendScrollEvent(int browserId, int x, int y, int deltaX, int deltaY);
     void changeSize(int browserId, float a_dpi, int width, int height);
@@ -188,6 +193,7 @@ public:
 
 private:
     void cleanUpBrowser(int browserId);
+    CefRefPtr<CefRequestContext> createContext(const std::string &url, const std::string &dataPath, const std::string &locale, std::function<void(int)> callback);
 
     // List of existing browser windows. Only accessed on the CEF UI thread.
     std::unordered_map<int, browser_info> browser_map_;
