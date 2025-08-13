@@ -454,11 +454,10 @@ class WebViewState extends State<WebView> with WebeViewTextInput {
   }
 
   @override
-  void dispose() {
+  void deactivate() {
     _tooltip?.showToolTip('');
-    super.dispose();
+    super.deactivate();
   }
-
 
   @override
   Widget build(BuildContext context) {
