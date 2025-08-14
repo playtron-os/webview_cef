@@ -742,15 +742,22 @@ namespace webview_cef
 		CefDoMessageLoopWork();
 	}
 
-	void SwapBufferFromBgraToRgba(void *_dest, const void *_src, int width, int height)
+	void SwapBufferFromBgraToRgba(void *_dest, const void *_src, int width, int height, int maxWidth, int maxHeight)
 	{
 		int32_t *dest = (int32_t *)_dest;
 		int32_t *src = (int32_t *)_src;
 		int32_t rgba;
 		int32_t bgra;
+		int maxLength = maxWidth * maxHeight;
 		int length = width * height;
-		for (int i = 0; i < length; i++)
+		for (int i = 0; i < maxLength; i++)
 		{
+			if (i >= length)
+			{
+				dest[i] = 0;
+				continue;
+			}
+
 			bgra = src[i];
 			// BGRA in hex = 0xAARRGGBB.
 			rgba = (bgra & 0x00ff0000) >> 16	// Red >> Blue.

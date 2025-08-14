@@ -82,7 +82,11 @@ class WebviewTooltip {
       if (_eStatus == TooltipStatus.prepare) {
         _timer?.cancel();
       } else {
-        _overlayEntry?.remove();
+        try {
+          _overlayEntry?.remove();
+        } catch (e) {
+          //ignore
+        }
       }
       _eStatus = TooltipStatus.hide;
       return;

@@ -5,6 +5,7 @@
 #include <sys/utsname.h>
 
 #include <cstring>
+#include <algorithm>
 #include <unordered_map>
 #include <webview_plugin.h>
 #include "webview_cef_keyevent.h"
@@ -45,12 +46,25 @@ public:
 
   virtual void onFrame(const void *buffer, int32_t width, int32_t height) override
   {
-    texture->width = width;
-    texture->height = height;
-    const auto size = width * height * 4;
-    delete texture->buffer;
-    texture->buffer = new uint8_t[size];
-    webview_cef::SwapBufferFromBgraToRgba((void *)texture->buffer, buffer, width, height);
+    texture->width = std::max(texture->width, (uint32_t)width);
+    texture->height = std::max(texture->height, (uint32_t)height);
+    const auto size = texture->width * texture->height * 4;
+
+    if (texture->buffer_size != size)
+    {
+      if (texture->buffer)
+      {
+        delete[] texture->buffer;
+        texture->buffer = nullptr;
+      }
+
+      texture->buffer_size = size;
+    }
+
+    if (!texture->buffer)
+      texture->buffer = new uint8_t[size];
+
+    webview_cef::SwapBufferFromBgraToRgba((void *)texture->buffer, buffer, width, height, texture->width, texture->height);
     fl_texture_registrar_mark_texture_frame_available(register_, FL_TEXTURE(texture));
   }
   FlTextureRegistrar *register_;
@@ -215,7 +229,8 @@ static void webview_cef_plugin_handle_method_call(
   const gchar *method = fl_method_call_get_name(method_call);
   WValue *encodeArgs = encode_flvalue_to_wvalue(fl_method_call_get_args(method_call));
   g_object_ref(method_call);
-  self->m_plugin->HandleMethodCall(method, encodeArgs, [=](int ret, WValue *responseArgs){
+  self->m_plugin->HandleMethodCall(method, encodeArgs, [=](int ret, WValue *responseArgs)
+                                   {
     if (ret > 0){
       fl_method_call_respond_success(method_call, encode_wavlue_to_flvalue(responseArgs), nullptr);
     }
@@ -225,16 +240,16 @@ static void webview_cef_plugin_handle_method_call(
     else{
       fl_method_call_respond_not_implemented(method_call, nullptr);
     }
-    g_object_unref(method_call); 
-  });
+    g_object_unref(method_call); });
   webview_value_unref(encodeArgs);
 }
 
 static void webview_cef_plugin_dispose(GObject *object)
 {
   webviewPlugins.erase(WEBVIEW_CEF_PLUGIN(object)->m_window);
-  WEBVIEW_CEF_PLUGIN(object)->m_plugin = nullptr; 
-  if(webviewPlugins.empty()){
+  WEBVIEW_CEF_PLUGIN(object)->m_plugin = nullptr;
+  if (webviewPlugins.empty())
+  {
     webview_cef::stopCEF();
   }
   G_OBJECT_CLASS(webview_cef_plugin_parent_class)->dispose(object);
@@ -245,7 +260,8 @@ static void webview_cef_plugin_class_init(WebviewCefPluginClass *klass)
   G_OBJECT_CLASS(klass)->dispose = webview_cef_plugin_dispose;
 }
 
-static void webview_cef_plugin_init(WebviewCefPlugin *self) {
+static void webview_cef_plugin_init(WebviewCefPlugin *self)
+{
   self->m_plugin = std::make_shared<webview_cef::WebviewPlugin>();
 }
 
@@ -275,16 +291,16 @@ void webview_cef_plugin_register_with_registrar(FlPluginRegistrar *registrar)
                                             g_object_ref(plugin),
                                             g_object_unref);
 
-  plugin->m_plugin->setInvokeMethodFunc([=](std::string method, WValue *arguments) {
+  plugin->m_plugin->setInvokeMethodFunc([=](std::string method, WValue *arguments)
+                                        {
     FlValue *args = encode_wavlue_to_flvalue(arguments);
     fl_method_channel_invoke_method(channel, method.c_str(), args, NULL, NULL, NULL);
-    fl_value_unref(args);
-  });
+    fl_value_unref(args); });
 
-  plugin->m_plugin->setCreateTextureFunc([=](){
+  plugin->m_plugin->setCreateTextureFunc([=]()
+                                         {
     std::shared_ptr<WebviewTextureRenderer> renderer = std::make_shared<WebviewTextureRenderer>(plugin->m_textureRegister);
-    return std::dynamic_pointer_cast<webview_cef::WebviewTexture>(renderer);
-  });
+    return std::dynamic_pointer_cast<webview_cef::WebviewTexture>(renderer); });
 
   g_object_unref(plugin);
 }
@@ -322,16 +338,19 @@ FLUTTER_PLUGIN_EXPORT gboolean processKeyEventForCEF(GtkWidget *widget, GdkEvent
       // is apparently just how webkit handles it and what it expects.
       key_event.unmodified_character = '\r';
     }
-    else if((windows_key_code == KeyboardCode::VKEY_V) && (key_event.modifiers & EVENTFLAG_CONTROL_DOWN) && (event->type == GDK_KEY_PRESS)){
-      //try to fix copy request freeze process problem(flutter engine will send a copy request when ctrl+v pressed)
+    else if ((windows_key_code == KeyboardCode::VKEY_V) && (key_event.modifiers & EVENTFLAG_CONTROL_DOWN) && (event->type == GDK_KEY_PRESS))
+    {
+      // try to fix copy request freeze process problem(flutter engine will send a copy request when ctrl+v pressed)
       int res = 0;
-      if(system("xclip -o -sel clipboard | xclip -i -sel clipboard  &>/dev/null") == 0){
+      if (system("xclip -o -sel clipboard | xclip -i -sel clipboard  &>/dev/null") == 0)
+      {
         res = system("xclip -o -sel clipboard | xclip -i &>/dev/null");
       }
       // Suppress unused variable warning
       (void)res;
     }
-    else {
+    else
+    {
       // FIXME: fix for non BMP chars
       key_event.unmodified_character =
           static_cast<int>(gdk_keyval_to_unicode(event->keyval));
