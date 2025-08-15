@@ -161,6 +161,7 @@ void WebviewApp::OnBeforeCommandLineProcessing(const CefString &process_type, Ce
     command_line->AppendSwitch("single-process");
 #endif
 #ifdef __linux__
+    command_line->AppendSwitch("disable-vulkan");
     command_line->AppendSwitch("use-gl=egl");
 #endif
 }
