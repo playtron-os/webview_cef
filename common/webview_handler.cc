@@ -62,6 +62,7 @@ namespace
                       std::string url,
                       std::string dataPath,
                       std::string locale,
+                      bool deleteCookiesOnInit,
                       std::function<void(int)> callback)
             : handler_(handler),
               url_(std::move(url)),
@@ -455,18 +456,39 @@ void WebviewHandler::closeBrowser(int browserId)
     }
 }
 
-CefRefPtr<CefRequestContext> WebviewHandler::createContext(const std::string &url, const std::string &dataPath, const std::string &locale, std::function<void(int)> callback)
+CefRefPtr<CefRequestContext> WebviewHandler::createContext(const std::string &url, const std::string &dataPath, const std::string &locale, bool deleteCookiesOnInit, std::function<void(int)> callback)
 {
     CefRequestContextSettings cs;
     CefString(&cs.cache_path) = dataPath;
+    cs.persist_session_cookies = true;
 
     if (!locale.empty())
     {
         CefString(&cs.accept_language_list) = locale + ",en;q=0.9";
     }
 
-    auto handler = new RcInitHandler(this, url, dataPath, locale, callback);
-    return CefRequestContext::CreateContext(cs, handler);
+    auto handler = new RcInitHandler(this, url, dataPath, locale, deleteCookiesOnInit, callback);
+    auto ctx = CefRequestContext::CreateContext(cs, handler);
+
+    auto mgr = ctx->GetCookieManager(nullptr);
+
+    if (deleteCookiesOnInit) {
+        // Delete all cookies in this context
+        mgr->DeleteCookies("", "", nullptr);  // domain="", name="" => all cookies
+
+        // Optional: clear HTTP cache as well
+        class Done : public CefCompletionCallback {
+            public:
+                explicit Done(std::function<void()> cb) : cb_(std::move(cb)) {}
+                void OnComplete() override { if (cb_) cb_(); }
+                IMPLEMENT_REFCOUNTING(Done);
+            private:
+                std::function<void()> cb_;
+        };
+        ctx->ClearHttpAuthCredentials(new Done([]{}));
+    }
+
+    return ctx;
 }
 
 void WebviewHandler::createBrowser(std::string url, std::function<void(int)> callback)
@@ -512,13 +534,14 @@ void WebviewHandler::createBrowserOnUI(std::string url,
 void WebviewHandler::createBrowserWithOptions(std::string url,
                                               std::string dataPath,
                                               std::string locale,
+                                              bool deleteCookiesOnInit,
                                               std::function<void(int)> callback)
 {
 #ifndef OS_MAC
     if (!CefCurrentlyOn(TID_UI))
     {
         CefPostTask(TID_UI, base::BindOnce(&WebviewHandler::createBrowserWithOptions,
-                                           this, url, dataPath, locale, callback));
+                                           this, url, dataPath, locale, deleteCookiesOnInit, callback));
         return;
     }
 #endif
@@ -533,7 +556,7 @@ void WebviewHandler::createBrowserWithOptions(std::string url,
         }
     }
 
-    createContext(url, dataPath, locale, callback);
+    createContext(url, dataPath, locale, deleteCookiesOnInit, callback);
 }
 
 void WebviewHandler::sendScrollEvent(int browserId, int x, int y, int deltaX, int deltaY)

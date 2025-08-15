@@ -321,6 +321,7 @@ namespace webview_cef
 			std::string url = webview_value_get_string(webview_value_get_list_value(values, 0));
 			std::string dataPath = "";
 			std::string locale = "";
+			bool deleteCookiesOnInit = false;
 
 			// Get dataPath if provided (can be null)
 			WValue *dataPathValue = webview_value_get_list_value(values, 1);
@@ -336,7 +337,14 @@ namespace webview_cef
 				locale = webview_value_get_string(localeValue);
 			}
 
-			m_handler->createBrowserWithOptions(url, dataPath, locale, [=](int browserId)
+			// Get deleteCookiesOnInit if provided
+			WValue *deleteCookiesValue = webview_value_get_list_value(values, 3);
+			if (deleteCookiesValue && webview_value_get_type(deleteCookiesValue) == Webview_Value_Type_Bool)
+			{
+				deleteCookiesOnInit = webview_value_get_bool(deleteCookiesValue);
+			}
+
+			m_handler->createBrowserWithOptions(url, dataPath, locale, deleteCookiesOnInit, [=](int browserId)
 												{
 				std::shared_ptr<WebviewTexture> renderer = m_createTextureFunc();
 				m_renderers[browserId] = renderer;
@@ -695,7 +703,7 @@ namespace webview_cef
 	{
 		CefSettings cefs;
 		cefs.windowless_rendering_enabled = true;
-		cefs.no_sandbox = true;
+		cefs.persist_session_cookies = true;
 #if !defined(OS_MAC)
 		cefs.multi_threaded_message_loop = true;
 #else

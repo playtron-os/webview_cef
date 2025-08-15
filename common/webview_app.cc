@@ -98,77 +98,37 @@ WebviewApp::ProcessType WebviewApp::GetProcessType(CefRefPtr<CefCommandLine> com
 	return OtherProcess;
 }
 
-void WebviewApp::OnBeforeCommandLineProcessing(const CefString &process_type, CefRefPtr<CefCommandLine> command_line)
-{
-    // Pass additional command-line flags to the browser process.
-	if (process_type.empty())
-	{
-		if (!m_bEnableGPU)
-		{
-			command_line->AppendSwitch("disable-gpu");
-			command_line->AppendSwitch("disable-gpu-compositing");
-		}
+void WebviewApp::OnBeforeCommandLineProcessing(const CefString& process_type,
+                                               CefRefPtr<CefCommandLine> cl) {
+  if (process_type.empty()) {
+    cl->AppendSwitch("no-sandbox");
+    cl->AppendSwitch("disable-gpu-shader-disk-cache");
+    cl->AppendSwitchWithValue("autoplay-policy", "no-user-gesture-required");
 
-		command_line->AppendSwitch("disable-web-security");                                     //disable web security
-		command_line->AppendSwitch("allow-running-insecure-content");                           //allow running insecure content in secure pages
-		// Don't create a "GPUCache" directory when cache-path is unspecified.
-		command_line->AppendSwitch("disable-gpu-shader-disk-cache");                            //disable gpu shader disk cache
-        command_line->AppendSwitch("no-sandbox");                       
+    // X11 hint (GTK). Harmless if already on X11.
+    cl->AppendSwitchWithValue("ozone-platform-hint", "x11");
 
-		//http://www.chromium.org/developers/design-documents/process-models
-		if (m_uMode == 1)
-		{
-			command_line->AppendSwitch("process-per-site");                                     //each site in its own process
-			command_line->AppendSwitchWithValue("renderer-process-limit ", "8");              //limit renderer process count to decrease memory usage
-		}
-		else if (m_uMode == 2)
-		{
-			command_line->AppendSwitch("process-per-tab");                                      //each tab in its own process
-		}
-		else if (m_uMode == 3)
-		{
-			command_line->AppendSwitch("single-process");                                     //all in one process
-		}
-		command_line->AppendSwitchWithValue("autoplay-policy", "no-user-gesture-required");     //autoplay policy for media
+    // CanvasOopRasterization can help perf; keep UA-CH too.
+    cl->AppendSwitchWithValue(
+      "enable-features",
+      "CanvasOopRasterization,UserAgentClientHints,GreaseUACH"
+    );
 
-        //Support cross domain requests
-        std::string values = command_line->GetSwitchValue("disable-features");
-        if (values == "")
-        {
-            values = "SameSiteByDefaultCookies,CookiesWithoutSameSiteMustBeSecure,ThirdPartyStoragePartitioning,PartitionedCookies,FirstPartySets";
-        }
-        else
-        {
-            values += ",SameSiteByDefaultCookies,CookiesWithoutSameSiteMustBeSecure,ThirdPartyStoragePartitioning,PartitionedCookies,FirstPartySets";
-        }
-        if (values.find("CalculateNativeWinOcclusion") == size_t(-1))
-        {
-            values += ",CalculateNativeWinOcclusion";
-        }
-
-        command_line->AppendSwitchWithValue("disable-features", values);
-        // for unsafe domain, add domain to whitelist
-		if (!m_strFilterDomain.empty())
-		{
-			command_line->AppendSwitch("ignore-certificate-errors");                            //ignore certificate errors
-			command_line->AppendSwitchWithValue("unsafely-treat-insecure-origin-as-secure",
-                m_strFilterDomain);
-		}
-
-        command_line->AppendSwitchWithValue("enable-features", "UserAgentClientHints,GreaseUACH");
-    }
+    // Make sure 2D canvas is available/accelerated.
+    cl->AppendSwitch("enable-accelerated-2d-canvas");
+#ifdef __linux__
+    // Prefer ANGLE on Vulkan (hardware).
+    cl->AppendSwitchWithValue("use-gl", "angle");
+    cl->AppendSwitchWithValue("use-angle", "vulkan");
+#endif
+  }
 
 #ifdef __APPLE__
-    command_line->AppendSwitch("use-mock-keychain");
-    command_line->AppendSwitch("single-process");
-#endif
-#ifdef __linux__
-    command_line->AppendSwitch("enable-chrome-runtime");
-    command_line->AppendSwitch("enable-unsafe-swiftshader");
-    command_line->AppendSwitch("disable-vulkan");
-    command_line->AppendSwitch("use-gl=egl");
+  cl->AppendSwitch("use-mock-keychain");
+  cl->AppendSwitch("single-process");
 #endif
 }
+
 
 void WebviewApp::OnContextInitialized()
 {

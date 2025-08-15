@@ -14,11 +14,12 @@ import 'webview_tooltip.dart';
 
 class WebViewController extends ValueNotifier<bool> {
   WebViewController(this._pluginChannel, this._index,
-      {Widget? loading, String? dataPath, String? locale})
+      {Widget? loading, String? dataPath, String? locale, bool? deleteCookiesOnInit})
       : super(false) {
     _loadingWidget = loading;
     _dataPath = dataPath;
     _locale = locale;
+    _deleteCookiesOnInit = deleteCookiesOnInit;
   }
 
   WebViewController.createPopup(
@@ -36,6 +37,7 @@ class WebViewController extends ValueNotifier<bool> {
   Widget? _loadingWidget;
   String? _dataPath;
   String? _locale;
+  bool? _deleteCookiesOnInit;
   bool _isPageLoading = false;
 
   late WebView _webviewWidget;
@@ -91,9 +93,9 @@ class WebViewController extends ValueNotifier<bool> {
     try {
       await WebviewManager().ready;
       List args;
-      if (_dataPath != null || _locale != null) {
+      if (_dataPath != null || _locale != null || _deleteCookiesOnInit == true) {
         args = await _pluginChannel
-            .invokeMethod('createWithOptions', [url, _dataPath, _locale]);
+            .invokeMethod('createWithOptions', [url, _dataPath, _locale, _deleteCookiesOnInit ?? false]);
       } else {
         args = await _pluginChannel.invokeMethod('create', url);
       }
