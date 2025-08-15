@@ -10,6 +10,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <filesystem> // Add this include for std::filesystem
+#include <cstdlib>
 
 namespace fs = std::filesystem;
 

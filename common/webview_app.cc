@@ -100,33 +100,20 @@ WebviewApp::ProcessType WebviewApp::GetProcessType(CefRefPtr<CefCommandLine> com
 
 void WebviewApp::OnBeforeCommandLineProcessing(const CefString& process_type,
                                                CefRefPtr<CefCommandLine> cl) {
-  if (process_type.empty()) {
-    cl->AppendSwitch("no-sandbox");
-    cl->AppendSwitch("disable-gpu-shader-disk-cache");
-    cl->AppendSwitchWithValue("autoplay-policy", "no-user-gesture-required");
+    cl->AppendSwitchWithValue("ozone-platform-hint", "x11");     // belt & suspenders
+    cl->AppendSwitchWithValue("password-store", "basic");        // avoid kwallet
 
-    // X11 hint (GTK). Harmless if already on X11.
-    cl->AppendSwitchWithValue("ozone-platform-hint", "x11");
-
-    // CanvasOopRasterization can help perf; keep UA-CH too.
-    cl->AppendSwitchWithValue(
-      "enable-features",
-      "CanvasOopRasterization,UserAgentClientHints,GreaseUACH"
-    );
-
-    // Make sure 2D canvas is available/accelerated.
-    cl->AppendSwitch("enable-accelerated-2d-canvas");
-#ifdef __linux__
-    // Prefer ANGLE on Vulkan (hardware).
-    cl->AppendSwitchWithValue("use-gl", "angle");
-    cl->AppendSwitchWithValue("use-angle", "vulkan");
-#endif
-  }
-
-#ifdef __APPLE__
-  cl->AppendSwitch("use-mock-keychain");
-  cl->AppendSwitch("single-process");
-#endif
+    if (process_type.empty()) {
+        // Browser-process-only extras
+        cl->AppendSwitch("no-sandbox");
+        cl->AppendSwitch("disable-gpu-shader-disk-cache");
+        cl->AppendSwitchWithValue("autoplay-policy", "no-user-gesture-required");
+        cl->AppendSwitchWithValue(
+        "enable-features",
+        "CanvasOopRasterization,UserAgentClientHints,GreaseUACH"
+        );
+        cl->AppendSwitch("enable-accelerated-2d-canvas");
+    }
 }
 
 
@@ -246,8 +233,10 @@ void WebviewApp::SetEnableGPU(bool bEnable)
     m_bEnableGPU = bEnable;
 }
 
-void WebviewApp::OnBeforeChildProcessLaunch(CefRefPtr<CefCommandLine> command_line)
+void WebviewApp::OnBeforeChildProcessLaunch(CefRefPtr<CefCommandLine> cl)
 {
+    cl->AppendSwitchWithValue("ozone-platform-hint", "x11");     // belt & suspenders
+    cl->AppendSwitchWithValue("password-store", "basic");        // avoid kwallet
 }
 
 void WebviewApp::OnBrowserDestroyed(CefRefPtr<CefBrowser> browser)
