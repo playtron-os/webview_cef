@@ -464,7 +464,7 @@ CefRefPtr<CefRequestContext> WebviewHandler::createContext(const std::string &ur
 
     if (!locale.empty())
     {
-        CefString(&cs.accept_language_list) = locale + ",en;q=0.9";
+        CefString(&cs.accept_language_list) = locale + ",en";
     }
 
     auto handler = new RcInitHandler(this, url, dataPath, locale, deleteCookiesOnInit, callback);
