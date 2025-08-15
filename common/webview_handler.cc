@@ -462,7 +462,7 @@ CefRefPtr<CefRequestContext> WebviewHandler::createContext(const std::string &ur
 
     if (!locale.empty())
     {
-        CefString(&cs.accept_language_list) = locale;
+        CefString(&cs.accept_language_list) = locale + ",en;q=0.9";
     }
 
     auto handler = new RcInitHandler(this, url, dataPath, locale, callback);
@@ -818,44 +818,16 @@ void WebviewHandler::deleteCookie(const std::string &domain, const std::string &
     }
 }
 
-void WebviewHandler::clearDataPath(const std::string &dataPath)
-{
-    if (dataPath.empty())
-    {
-        return;
-    }
-
-    // ⚠️ IMPORTANT: This function assumes no browser instance is currently
-    // using this `dataPath`. Calling this on an active profile will cause
-    // instability and likely crash the application.
-
-    // The most reliable method is to delete the contents of the directory.
-    // This removes cookies, local storage, the cache, login credentials,
-    // IndexedDB, and everything else associated with the profile.
+void WebviewHandler::clearDataPath(const std::string& dataPath) {
+    if (dataPath.empty()) return;
     std::error_code ec;
-    fs::path dirPath(dataPath);
-
-    // Check if the directory exists and is actually a directory.
-    if (fs::exists(dirPath, ec) && !ec && fs::is_directory(dirPath, ec) && !ec)
-    {
-        // Iterate over the contents and remove each item.
-        for (const auto &entry : fs::directory_iterator(dirPath, ec))
-        {
-            if (ec)
-                break; // Stop if there's an error reading the directory
-
-            fs::remove_all(entry.path(), ec);
-            if (ec)
-            {
-                // Log the error but attempt to continue with other files.
-                std::cerr << "Error removing " << entry.path() << ": " << ec.message() << std::endl;
-                ec.clear(); // Clear the error and continue.
-            }
-        }
-    }
-    else if (ec)
-    {
-        std::cerr << "Error accessing data path " << dataPath << ": " << ec.message() << std::endl;
+    fs::path src(dataPath);
+    if (!fs::exists(src, ec) || ec) return;
+    auto tomb = src.parent_path() / (src.filename().string() + ".old." + std::to_string(std::time(nullptr)));
+    fs::rename(src, tomb, ec);  // if this succeeds, the profile is gone from under CEF
+    if (!ec) {
+      // best-effort delete
+      fs::remove_all(tomb, ec);
     }
 }
 

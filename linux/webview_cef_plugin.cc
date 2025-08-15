@@ -7,6 +7,7 @@
 #include <cstring>
 #include <algorithm>
 #include <unordered_map>
+#include <utility> // for std::pair
 #include <webview_plugin.h>
 #include "webview_cef_keyevent.h"
 #include "webview_cef_texture.h"
@@ -34,13 +35,37 @@ public:
   {
     register_ = texture_register;
     texture = webview_cef_texture_new();
-    fl_texture_registrar_register_texture(register_, FL_TEXTURE(texture));
+
+    // Register on the platform thread to be safe (usually already on main).
+    auto registrar = register_;
+    auto tex = texture;
+    g_main_context_invoke(
+        nullptr,
+        [](gpointer data) -> gboolean {
+          auto* pair = static_cast<std::pair<FlTextureRegistrar*, WebviewCefTexture*>*>(data);
+          fl_texture_registrar_register_texture(pair->first, FL_TEXTURE(pair->second));
+          delete pair;
+          return G_SOURCE_REMOVE;
+        },
+        new std::pair<FlTextureRegistrar*, WebviewCefTexture*>(registrar, tex));
+
     textureId = (int64_t)texture;
   }
 
   virtual ~WebviewTextureRenderer()
   {
-    fl_texture_registrar_unregister_texture(register_, FL_TEXTURE(texture));
+    // Unregister must be on the platform thread
+    auto registrar = register_;
+    auto tex = texture;
+    g_main_context_invoke(
+        nullptr,
+        [](gpointer data)->gboolean{
+          auto* pair = static_cast<std::pair<FlTextureRegistrar*, WebviewCefTexture*>*>(data);
+          fl_texture_registrar_unregister_texture(pair->first, FL_TEXTURE(pair->second));
+          delete pair;
+          return G_SOURCE_REMOVE;
+        },
+        new std::pair<FlTextureRegistrar*, WebviewCefTexture*>(registrar, tex));
     register_ = nullptr;
   }
 
@@ -57,7 +82,6 @@ public:
         delete[] texture->buffer;
         texture->buffer = nullptr;
       }
-
       texture->buffer_size = size;
     }
 
@@ -65,8 +89,21 @@ public:
       texture->buffer = new uint8_t[size];
 
     webview_cef::SwapBufferFromBgraToRgba((void *)texture->buffer, buffer, width, height, texture->width, texture->height);
-    fl_texture_registrar_mark_texture_frame_available(register_, FL_TEXTURE(texture));
+
+    // Notify Flutter on the platform thread
+    auto registrar = register_;
+    auto tex = texture;
+    g_main_context_invoke(
+        nullptr,
+        [](gpointer data) -> gboolean {
+          auto* pair = static_cast<std::pair<FlTextureRegistrar*, WebviewCefTexture*>*>(data);
+          fl_texture_registrar_mark_texture_frame_available(pair->first, FL_TEXTURE(pair->second));
+          delete pair;
+          return G_SOURCE_REMOVE;
+        },
+        new std::pair<FlTextureRegistrar*, WebviewCefTexture*>(registrar, tex));
   }
+
   FlTextureRegistrar *register_;
   WebviewCefTexture *texture;
 };
@@ -291,11 +328,35 @@ void webview_cef_plugin_register_with_registrar(FlPluginRegistrar *registrar)
                                             g_object_ref(plugin),
                                             g_object_unref);
 
+  // Marshal all channel invocations to the platform thread
   plugin->m_plugin->setInvokeMethodFunc([=](std::string method, WValue *arguments)
-                                        {
-    FlValue *args = encode_wavlue_to_flvalue(arguments);
-    fl_method_channel_invoke_method(channel, method.c_str(), args, NULL, NULL, NULL);
-    fl_value_unref(args); });
+  {
+    // Retain until we're done on the main thread
+    webview_value_ref(arguments);
+
+    struct InvokePayload {
+      FlMethodChannel* channel;
+      std::string method;
+      WValue* args;
+    };
+
+    g_object_ref(channel);
+    auto* payload = new InvokePayload{ channel, method, arguments };
+
+    g_main_context_invoke(
+        nullptr,
+        [](gpointer data) -> gboolean {
+          auto* p = static_cast<InvokePayload*>(data);
+          FlValue* fl_args = encode_wavlue_to_flvalue(p->args);
+          fl_method_channel_invoke_method(p->channel, p->method.c_str(), fl_args, /*response_handle*/nullptr, /*callback*/nullptr, /*user_data*/nullptr);
+          fl_value_unref(fl_args);
+          webview_value_unref(p->args);
+          g_object_unref(p->channel);
+          delete p;
+          return G_SOURCE_REMOVE;
+        },
+        payload);
+  });
 
   plugin->m_plugin->setCreateTextureFunc([=]()
                                          {
@@ -334,29 +395,27 @@ FLUTTER_PLUGIN_EXPORT gboolean processKeyEventForCEF(GtkWidget *widget, GdkEvent
 
     if (windows_key_code == VKEY_RETURN)
     {
-      // We need to treat the enter key as a key press of character \r.  This
-      // is apparently just how webkit handles it and what it expects.
+      // Treat Enter as '\r' like WebKit does.
       key_event.unmodified_character = '\r';
     }
     else if ((windows_key_code == KeyboardCode::VKEY_V) && (key_event.modifiers & EVENTFLAG_CONTROL_DOWN) && (event->type == GDK_KEY_PRESS))
     {
-      // try to fix copy request freeze process problem(flutter engine will send a copy request when ctrl+v pressed)
+      // Workaround for clipboard freeze
       int res = 0;
       if (system("xclip -o -sel clipboard | xclip -i -sel clipboard  &>/dev/null") == 0)
       {
         res = system("xclip -o -sel clipboard | xclip -i &>/dev/null");
       }
-      // Suppress unused variable warning
       (void)res;
     }
     else
     {
-      // FIXME: fix for non BMP chars
+      // FIXME: non-BMP chars
       key_event.unmodified_character =
           static_cast<int>(gdk_keyval_to_unicode(event->keyval));
     }
 
-    // If ctrl key is pressed down, then control character shall be input.
+    // Control characters
     if (key_event.modifiers & EVENTFLAG_CONTROL_DOWN)
     {
       key_event.character = GetControlCharacter(
@@ -366,6 +425,7 @@ FLUTTER_PLUGIN_EXPORT gboolean processKeyEventForCEF(GtkWidget *widget, GdkEvent
     {
       key_event.character = key_event.unmodified_character;
     }
+
     if (event->type == GDK_KEY_PRESS)
     {
       key_event.type = KEYEVENT_RAWKEYDOWN;
@@ -380,6 +440,6 @@ FLUTTER_PLUGIN_EXPORT gboolean processKeyEventForCEF(GtkWidget *widget, GdkEvent
 
     return TRUE;
   }
-  // processKeyEventForFlutter need return FALSE
+  // processKeyEventForFlutter needs FALSE
   return FALSE;
 }

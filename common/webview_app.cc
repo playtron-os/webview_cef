@@ -135,11 +135,11 @@ void WebviewApp::OnBeforeCommandLineProcessing(const CefString &process_type, Ce
         std::string values = command_line->GetSwitchValue("disable-features");
         if (values == "")
         {
-            values = "SameSiteByDefaultCookies,CookiesWithoutSameSiteMustBeSecure";
+            values = "SameSiteByDefaultCookies,CookiesWithoutSameSiteMustBeSecure,ThirdPartyStoragePartitioning,PartitionedCookies,FirstPartySets";
         }
         else
         {
-            values += ",SameSiteByDefaultCookies,CookiesWithoutSameSiteMustBeSecure";
+            values += ",SameSiteByDefaultCookies,CookiesWithoutSameSiteMustBeSecure,ThirdPartyStoragePartitioning,PartitionedCookies,FirstPartySets";
         }
         if (values.find("CalculateNativeWinOcclusion") == size_t(-1))
         {
@@ -154,6 +154,8 @@ void WebviewApp::OnBeforeCommandLineProcessing(const CefString &process_type, Ce
 			command_line->AppendSwitchWithValue("unsafely-treat-insecure-origin-as-secure",
                 m_strFilterDomain);
 		}
+
+        command_line->AppendSwitchWithValue("enable-features", "UserAgentClientHints,GreaseUACH");
     }
 
 #ifdef __APPLE__
@@ -161,6 +163,8 @@ void WebviewApp::OnBeforeCommandLineProcessing(const CefString &process_type, Ce
     command_line->AppendSwitch("single-process");
 #endif
 #ifdef __linux__
+    command_line->AppendSwitch("enable-chrome-runtime");
+    command_line->AppendSwitch("enable-unsafe-swiftshader");
     command_line->AppendSwitch("disable-vulkan");
     command_line->AppendSwitch("use-gl=egl");
 #endif
