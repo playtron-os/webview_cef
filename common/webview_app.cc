@@ -113,7 +113,7 @@ void WebviewApp::OnBeforeCommandLineProcessing(const CefString &process_type, Ce
 		command_line->AppendSwitch("allow-running-insecure-content");                           //allow running insecure content in secure pages
 		// Don't create a "GPUCache" directory when cache-path is unspecified.
 		command_line->AppendSwitch("disable-gpu-shader-disk-cache");                            //disable gpu shader disk cache
-        command_line->AppendSwitch("no-sanbox");                       
+        command_line->AppendSwitch("no-sandbox");                       
 
 		//http://www.chromium.org/developers/design-documents/process-models
 		if (m_uMode == 1)
@@ -161,7 +161,7 @@ void WebviewApp::OnBeforeCommandLineProcessing(const CefString &process_type, Ce
     command_line->AppendSwitch("single-process");
 #endif
 #ifdef __linux__
-                                           
+    command_line->AppendSwitch("use-gl=egl");
 #endif
 }
 
