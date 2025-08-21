@@ -3,6 +3,7 @@
 #ifdef OS_MAC
 #include <include/wrapper/cef_library_loader.h>
 #endif
+#include "include/cef_version_info.h"
 
 #include <math.h>
 #include <memory>
@@ -13,6 +14,18 @@
 #include <cstdlib>
 
 namespace fs = std::filesystem;
+
+static std::string GetChromeVersionString()
+{
+	int major = cef_version_info(4);
+	int minor = cef_version_info(5);
+	int build = cef_version_info(6);
+	int patch = cef_version_info(7);
+
+	char buf[64];
+	std::snprintf(buf, sizeof(buf), "%d.%d.%d.%d", major, minor, build, patch);
+	return std::string(buf);
+}
 
 namespace webview_cef
 {
@@ -740,8 +753,14 @@ namespace webview_cef
 		auto canon = fs::weakly_canonical(g_root_cache_path, ec2);
 		std::cerr << "Cef root cache path: " << (ec2 ? std::string(g_root_cache_path) : canon.string()) << "\n";
 
-		if (!userAgent.empty())
-			CefString(&cefs.user_agent_product) = userAgent;
+		char default_ua[256];
+		snprintf(default_ua, sizeof(default_ua),
+				 "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+				 "Chrome/%s Safari/537.36",
+				 GetChromeVersionString().c_str());
+		std::string ua = userAgent.empty() ? default_ua : userAgent;
+
+		CefString(&cefs.user_agent_product) = ua;
 
 		CefInitialize(mainArgs, cefs, app.get(), nullptr);
 	}
