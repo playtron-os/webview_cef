@@ -755,7 +755,6 @@ namespace webview_cef
 
 		char default_ua[256];
 		snprintf(default_ua, sizeof(default_ua),
-				 "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
 				 "Chrome/%s Safari/537.36",
 				 GetChromeVersionString().c_str());
 		std::string ua = userAgent.empty() ? default_ua : userAgent;

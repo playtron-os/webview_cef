@@ -380,10 +380,6 @@ void WebviewHandler::OnLoadError(CefRefPtr<CefBrowser> browser,
 void WebviewHandler::OnLoadStart(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
                                  CefLoadHandler::TransitionType transition_type)
 {
-    if (onLoadStart)
-    {
-        onLoadStart(browser->GetIdentifier(), frame->GetURL());
-    }
     return;
 }
 
@@ -1026,4 +1022,20 @@ void WebviewHandler::OnPaint(CefRefPtr<CefBrowser> browser, CefRenderHandler::Pa
     {
         onPaintCallback(browserId, buffer, w, h);
     }
+}
+
+bool WebviewHandler::OnBeforeBrowse(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefRequest> request, bool user_gesture, bool is_redirect) 
+{
+    if (onLoadStart)
+    {
+        onLoadStart(browser->GetIdentifier(), frame->GetURL());
+    }
+    return false;
+}
+
+
+cef_return_value_t WebviewHandler::OnBeforeResourceLoad(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefRequest> request, CefRefPtr<CefCallback> callback)
+{
+    request->SetHeaderByName("User-Agent", "TestValue/2", true);
+    return RV_CONTINUE;
 }

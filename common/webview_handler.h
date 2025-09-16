@@ -40,7 +40,9 @@ class WebviewHandler : public CefClient,
                        public CefLifeSpanHandler,
                        public CefFocusHandler,
                        public CefLoadHandler,
-                       public CefRenderHandler
+                       public CefRenderHandler,
+                       public CefRequestHandler,
+                       public CefResourceRequestHandler
 {
 public:
     // Paint callback
@@ -78,6 +80,15 @@ public:
     {
         return this;
     }
+    virtual CefRefPtr<CefRequestHandler> GetRequestHandler() override
+    {
+        return this;
+    }
+    virtual CefRefPtr<CefResourceRequestHandler> GetResourceRequestHandler(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefRequest> request, bool is_navigation, bool is_download, const CefString &request_initiator, bool &disable_default_handling) override 
+    {
+        return this;
+    }
+    
     virtual CefRefPtr<CefLoadHandler> GetLoadHandler() override { return this; }
     virtual CefRefPtr<CefRenderHandler> GetRenderHandler() override { return this; }
 
@@ -149,6 +160,10 @@ public:
                                int x,
                                int y) override;
     virtual void OnImeCompositionRangeChanged(CefRefPtr<CefBrowser> browser, const CefRange &selection_range, const CefRenderHandler::RectList &character_bounds) override;
+
+
+    virtual bool OnBeforeBrowse(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefRequest> request, bool user_gesture, bool is_redirect) override;
+    virtual ReturnValue OnBeforeResourceLoad (CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefRequest> request, CefRefPtr<CefCallback> callback) override;
 
     // Request that all existing browser windows close.
     void CloseAllBrowsers(bool force_close);
