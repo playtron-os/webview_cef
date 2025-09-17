@@ -62,12 +62,14 @@ namespace
                       std::string url,
                       std::string dataPath,
                       std::string locale,
+                      std::string userAgent,
                       bool deleteCookiesOnInit,
                       std::function<void(int)> callback)
             : handler_(handler),
               url_(std::move(url)),
               dataPath_(std::move(dataPath)),
               locale_(std::move(locale)),
+              userAgent_(std::move(userAgent)),
               callback_(std::move(callback)) {}
 
         void OnRequestContextInitialized(CefRefPtr<CefRequestContext> context) override
@@ -75,14 +77,14 @@ namespace
             // Always marshal to UI before creating a browser
             CefPostTask(TID_UI, base::BindOnce(&WebviewHandler::createBrowserOnUI,
                                                handler_, url_, dataPath_, locale_,
-                                               context, callback_));
+                                               userAgent_, context, callback_));
         }
 
         IMPLEMENT_REFCOUNTING(RcInitHandler);
 
     private:
         WebviewHandler *handler_;
-        std::string url_, dataPath_, locale_;
+        std::string url_, dataPath_, locale_, userAgent_;
         std::function<void(int)> callback_;
     };
 
@@ -380,10 +382,6 @@ void WebviewHandler::OnLoadError(CefRefPtr<CefBrowser> browser,
 void WebviewHandler::OnLoadStart(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
                                  CefLoadHandler::TransitionType transition_type)
 {
-    if (onLoadStart)
-    {
-        onLoadStart(browser->GetIdentifier(), frame->GetURL());
-    }
     return;
 }
 
@@ -429,6 +427,7 @@ bool WebviewHandler::IsChromeRuntimeEnabled()
 void WebviewHandler::cleanUpBrowser(int browserId)
 {
     auto it = browser_map_.find(browserId);
+    user_agent_overrides_.erase(browserId);
     if (it != browser_map_.end())
     {
         it->second.browser = nullptr;
@@ -456,7 +455,7 @@ void WebviewHandler::closeBrowser(int browserId)
     }
 }
 
-CefRefPtr<CefRequestContext> WebviewHandler::createContext(const std::string &url, const std::string &dataPath, const std::string &locale, bool deleteCookiesOnInit, std::function<void(int)> callback)
+CefRefPtr<CefRequestContext> WebviewHandler::createContext(const std::string &url, const std::string &dataPath, const std::string &locale, const std::string &userAgent, bool deleteCookiesOnInit, std::function<void(int)> callback)
 {
     CefRequestContextSettings cs;
     CefString(&cs.cache_path) = dataPath;
@@ -467,7 +466,7 @@ CefRefPtr<CefRequestContext> WebviewHandler::createContext(const std::string &ur
         CefString(&cs.accept_language_list) = locale + ",en";
     }
 
-    auto handler = new RcInitHandler(this, url, dataPath, locale, deleteCookiesOnInit, callback);
+    auto handler = new RcInitHandler(this, url, dataPath, locale, userAgent, deleteCookiesOnInit, callback);
     auto ctx = CefRequestContext::CreateContext(cs, handler);
 
     auto mgr = ctx->GetCookieManager(nullptr);
@@ -510,6 +509,7 @@ void WebviewHandler::createBrowser(std::string url, std::function<void(int)> cal
 void WebviewHandler::createBrowserOnUI(std::string url,
                                        std::string dataPath,
                                        std::string locale,
+                                       std::string userAgent,
                                        CefRefPtr<CefRequestContext> ctx,
                                        std::function<void(int)> callback)
 {
@@ -527,13 +527,15 @@ void WebviewHandler::createBrowserOnUI(std::string url,
 
     CefRefPtr<CefBrowser> browser =
         CefBrowserHost::CreateBrowserSync(wi, this, url, bs, nullptr, ctx);
-
+    if (!userAgent.empty())
+        user_agent_overrides_.insert_or_assign(browser->GetIdentifier(), userAgent);
     callback(browser->GetIdentifier());
 }
 
 void WebviewHandler::createBrowserWithOptions(std::string url,
                                               std::string dataPath,
                                               std::string locale,
+                                              std::string userAgent,
                                               bool deleteCookiesOnInit,
                                               std::function<void(int)> callback)
 {
@@ -541,11 +543,10 @@ void WebviewHandler::createBrowserWithOptions(std::string url,
     if (!CefCurrentlyOn(TID_UI))
     {
         CefPostTask(TID_UI, base::BindOnce(&WebviewHandler::createBrowserWithOptions,
-                                           this, url, dataPath, locale, deleteCookiesOnInit, callback));
+                                           this, url, dataPath, locale, userAgent, deleteCookiesOnInit, callback));
         return;
     }
 #endif
-
     // Validate dataPath: absolute + usable + under root (if root is set)
     if (!dataPath.empty())
     {
@@ -556,7 +557,7 @@ void WebviewHandler::createBrowserWithOptions(std::string url,
         }
     }
 
-    createContext(url, dataPath, locale, deleteCookiesOnInit, callback);
+    createContext(url, dataPath, locale, userAgent, deleteCookiesOnInit, callback);
 }
 
 void WebviewHandler::sendScrollEvent(int browserId, int x, int y, int deltaX, int deltaY)
@@ -1026,4 +1027,23 @@ void WebviewHandler::OnPaint(CefRefPtr<CefBrowser> browser, CefRenderHandler::Pa
     {
         onPaintCallback(browserId, buffer, w, h);
     }
+}
+
+bool WebviewHandler::OnBeforeBrowse(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefRequest> request, bool user_gesture, bool is_redirect) 
+{
+    if (onLoadStart)
+    {
+        onLoadStart(browser->GetIdentifier(), request->GetURL());
+    }
+    return false;
+}
+
+
+cef_return_value_t WebviewHandler::OnBeforeResourceLoad(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefRequest> request, CefRefPtr<CefCallback> callback)
+{
+    auto ua_iter = user_agent_overrides_.find(browser->GetIdentifier());
+    if (ua_iter != user_agent_overrides_.end()) {
+        request->SetHeaderByName("User-Agent", ua_iter->second, true);
+    }
+    return RV_CONTINUE;
 }
