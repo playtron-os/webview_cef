@@ -36,10 +36,11 @@ class WebviewManager extends ValueNotifier<bool> {
     String? dataPath,
     String? locale,
     bool? deleteCookiesOnInit,
+    String? userAgent,
   }) {
     int browserIndex = nextIndex++;
     final controller = WebViewController(pluginChannel, browserIndex,
-        loading: loading, dataPath: dataPath, locale: locale, deleteCookiesOnInit: deleteCookiesOnInit);
+        loading: loading, dataPath: dataPath, locale: locale, deleteCookiesOnInit: deleteCookiesOnInit, userAgent: userAgent);
     _tempWebViews[browserIndex] = controller;
     _tempInjectUserScripts[browserIndex] =
         injectUserScripts ?? InjectUserScripts();

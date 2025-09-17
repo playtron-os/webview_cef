@@ -162,7 +162,9 @@ public:
     virtual void OnImeCompositionRangeChanged(CefRefPtr<CefBrowser> browser, const CefRange &selection_range, const CefRenderHandler::RectList &character_bounds) override;
 
 
+    // CefRequestHandler
     virtual bool OnBeforeBrowse(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefRequest> request, bool user_gesture, bool is_redirect) override;
+    // CefResourceRequestHandler
     virtual ReturnValue OnBeforeResourceLoad (CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame, CefRefPtr<CefRequest> request, CefRefPtr<CefCallback> callback) override;
 
     // Request that all existing browser windows close.
@@ -173,10 +175,11 @@ public:
 
     void closeBrowser(int browserId);
     void createBrowser(std::string url, std::function<void(int)> callback);
-    void createBrowserWithOptions(std::string url, std::string dataPath, std::string locale, bool deleteCookiesOnInit, std::function<void(int)> callback);
+    void createBrowserWithOptions(std::string url, std::string dataPath, std::string locale, std::string userAgent, bool deleteCookiesOnInit, std::function<void(int)> callback);
     void createBrowserOnUI(std::string url,
                            std::string dataPath,
                            std::string locale,
+                           std::string userAgent,
                            CefRefPtr<CefRequestContext> ctx,
                            std::function<void(int)> callback);
 
@@ -208,10 +211,13 @@ public:
 
 private:
     void cleanUpBrowser(int browserId);
-    CefRefPtr<CefRequestContext> createContext(const std::string &url, const std::string &dataPath, const std::string &locale, bool deleteCookiesOnInit, std::function<void(int)> callback);
+    CefRefPtr<CefRequestContext> createContext(const std::string &url, const std::string &dataPath, const std::string &locale, const std::string &userAgent, bool deleteCookiesOnInit, std::function<void(int)> callback);
 
     // List of existing browser windows. Only accessed on the CEF UI thread.
     std::unordered_map<int, browser_info> browser_map_;
+
+    // Map of user agent override per browser id
+    std::unordered_map<int, std::string> user_agent_overrides_;
 
     std::unordered_map<std::string, std::function<void(CefRefPtr<CefValue>)>> js_callbacks_;
     // Include the default reference counting implementation.

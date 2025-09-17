@@ -336,6 +336,7 @@ namespace webview_cef
 			std::string dataPath = "";
 			std::string locale = "";
 			bool deleteCookiesOnInit = false;
+			std::string userAgent = "";
 
 			// Get dataPath if provided (can be null)
 			WValue *dataPathValue = webview_value_get_list_value(values, 1);
@@ -358,7 +359,13 @@ namespace webview_cef
 				deleteCookiesOnInit = webview_value_get_bool(deleteCookiesValue);
 			}
 
-			m_handler->createBrowserWithOptions(url, dataPath, locale, deleteCookiesOnInit, [=](int browserId)
+			WValue *userAgentValue = webview_value_get_list_value(values, 4);
+			if (userAgentValue && webview_value_get_type(userAgentValue) == Webview_Value_Type_String)
+			{
+				userAgent = webview_value_get_string(userAgentValue);
+			}
+
+			m_handler->createBrowserWithOptions(url, dataPath, locale, userAgent, deleteCookiesOnInit, [=](int browserId)
 												{
 				std::shared_ptr<WebviewTexture> renderer = m_createTextureFunc();
 				m_renderers[browserId] = renderer;
@@ -755,7 +762,7 @@ namespace webview_cef
 
 		char default_ua[256];
 		snprintf(default_ua, sizeof(default_ua),
-				 "Chrome/%s Safari/537.36",
+				 "Chrome/%s",
 				 GetChromeVersionString().c_str());
 		std::string ua = userAgent.empty() ? default_ua : userAgent;
 
