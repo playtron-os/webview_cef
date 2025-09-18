@@ -284,6 +284,11 @@ void WebviewHandler::OnAfterCreated(CefRefPtr<CefBrowser> browser)
                 return;
             }
 
+            auto parentUa = user_agent_overrides_.find(parentId);
+            if (parentUa != user_agent_overrides_.end()) {
+                user_agent_overrides_[id] = parentUa->second;
+            }
+
             browser->GetHost()->WasResized();
             browser->GetHost()->NotifyScreenInfoChanged();
 
